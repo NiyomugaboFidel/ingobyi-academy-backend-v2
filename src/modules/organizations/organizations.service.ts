@@ -11,6 +11,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { Prisma } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import {
   buildPaginatedMeta,
@@ -169,6 +170,10 @@ export class OrganizationsService {
           status: MembershipStatus.ACTIVE,
         },
         update: { role: invite.role, status: MembershipStatus.ACTIVE },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { isVerified: true },
       }),
     ]);
 
@@ -442,13 +447,45 @@ export class OrganizationsService {
   }
 
   async addMember(orgId: string, dto: AddMemberDto, actorId: string) {
-    const user = await this.prisma.user.findUnique({
+    if (dto.role === UserRole.SUPERADMIN) {
+      throw new BadRequestException('Cannot assign superadmin via organization');
+    }
+
+    let user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
+
     if (!user) {
-      throw new NotFoundException(
-        'No account with this email. Send an invite instead.',
-      );
+      const firstName = dto.firstName?.trim();
+      const lastName = dto.lastName?.trim();
+      if (!firstName || !lastName || !dto.password) {
+        throw new NotFoundException(
+          'No account with this email. Enter first name, last name, and password to create one.',
+        );
+      }
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+      user = await this.prisma.user.create({
+        data: {
+          email: dto.email.toLowerCase(),
+          passwordHash,
+          firstName,
+          lastName,
+          isVerified: true,
+        },
+      });
+      await this.audit.log({
+        userId: actorId,
+        orgId,
+        action: AuditAction.CREATE,
+        entity: 'User',
+        entityId: user.id,
+        metadata: { email: user.email, provisioned: true },
+      });
+    } else if (!user.isVerified) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isVerified: true },
+      });
     }
 
     const membership = await this.prisma.membership.upsert({
@@ -565,11 +602,17 @@ export class OrganizationsService {
     if (dto.status === 'APPROVED') {
       const role =
         dto.approvedRole ?? request.requestedRole ?? UserRole.STUDENT;
-      await this.prisma.membership.upsert({
-        where: { userId_orgId: { userId: request.userId, orgId } },
-        create: { userId: request.userId, orgId, role },
-        update: { role, status: MembershipStatus.ACTIVE },
-      });
+      await this.prisma.$transaction([
+        this.prisma.membership.upsert({
+          where: { userId_orgId: { userId: request.userId, orgId } },
+          create: { userId: request.userId, orgId, role },
+          update: { role, status: MembershipStatus.ACTIVE },
+        }),
+        this.prisma.user.update({
+          where: { id: request.userId },
+          data: { isVerified: true },
+        }),
+      ]);
     }
 
     if (requester) {

@@ -153,7 +153,9 @@ export class OrganizationsController {
 
   @Post(':id/members')
   @UseGuards(OrgGuard)
-  @ApiOperation({ summary: 'Add existing user as member (admin)' })
+  @ApiOperation({
+    summary: 'Add member (creates verified account if needed)',
+  })
   async addMember(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseCuidPipe) id: string,
