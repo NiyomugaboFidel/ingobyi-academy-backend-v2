@@ -1,8 +1,7 @@
 /**
- * Verify SMTP + Cloudinary from backend/.env
+ * Verify Resend + Cloudinary from backend/.env
  * Usage: npm run verify:integrations
  */
-import * as nodemailer from 'nodemailer';
 import { v2 as cloudinary } from 'cloudinary';
 import { config as loadDotenv } from 'dotenv';
 import { resolve } from 'path';
@@ -12,30 +11,29 @@ loadDotenv({ path: resolve(__dirname, '../.env') });
 
 const env = validateEnv(normalizeEnv(process.env as Record<string, unknown>));
 
-async function verifySmtp(): Promise<boolean> {
-  const host = env.SMTP_HOST;
-  const user = env.SMTP_USER;
-  const pass = env.SMTP_PASS;
-  const from = env.SMTP_FROM ?? 'noreply@ingobyi.com';
+async function verifyResend(): Promise<boolean> {
+  const apiKey = env.RESEND_API_KEY;
+  const from = env.EMAIL_FROM;
 
-  if (!host || !user || !pass) {
-    console.log('SMTP: SKIP — set SMTP_HOST, SMTP_USER, SMTP_PASS in .env');
+  if (!apiKey) {
+    console.log('Resend: SKIP — set RESEND_API_KEY in .env');
     return false;
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port: env.SMTP_PORT ?? 587,
-    secure: false,
-    auth: { user, pass },
-  });
-
   try {
-    await transporter.verify();
-    console.log(`SMTP: OK (${host}, from: ${from})`);
+    const response = await fetch('https://api.resend.com/domains', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`HTTP ${response.status}: ${body}`);
+    }
+
+    console.log(`Resend: OK (from: ${from})`);
     return true;
   } catch (err) {
-    console.error(`SMTP: FAIL — ${(err as Error).message}`);
+    console.error(`Resend: FAIL — ${(err as Error).message}`);
     return false;
   }
 }
@@ -71,14 +69,14 @@ function verifyCloudinary(): boolean {
 
 async function main(): Promise<void> {
   console.log('Checking integrations from backend/.env...\n');
-  const smtpOk = await verifySmtp();
+  const resendOk = await verifyResend();
   const cloudinaryOk = verifyCloudinary();
   console.log('');
-  if (smtpOk && cloudinaryOk) {
+  if (resendOk && cloudinaryOk) {
     console.log('All configured integrations are ready.');
     process.exit(0);
   }
-  if (!smtpOk && !cloudinaryOk) {
+  if (!resendOk && !cloudinaryOk) {
     console.log('No integrations configured (optional for local dev).');
     process.exit(0);
   }

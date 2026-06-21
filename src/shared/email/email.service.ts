@@ -1,50 +1,33 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 import { EnvConfig } from '../../config/configuration';
 import * as templates from './email.templates';
 
 export type OtpPurpose = 'VERIFY_EMAIL' | 'RESET_PASSWORD';
 
+const RESEND_API_URL = 'https://api.resend.com/emails';
+
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter | null = null;
-  private readonly isDev: boolean;
+  private readonly apiKey: string | undefined;
+  private readonly fromAddress: string;
 
   constructor(private readonly config: ConfigService<EnvConfig, true>) {
-    this.isDev = config.get('NODE_ENV', { infer: true }) !== 'production';
-    const host = config.get('SMTP_HOST', { infer: true });
-    const user = config.get('SMTP_USER', { infer: true });
-    const pass = config.get('SMTP_PASS', { infer: true });
-    if (host && user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port: config.get('SMTP_PORT', { infer: true }) ?? 587,
-        secure: false,
-        auth: { user, pass },
-      });
-    } else if (this.isDev) {
-      this.logger.warn(
-        'SMTP not configured — OTP codes will be logged to console in development',
-      );
-    }
+    this.apiKey = config.get('RESEND_API_KEY', { infer: true });
+    this.fromAddress =
+      config.get('EMAIL_FROM', { infer: true }) ??
+      'Ingobyi Academy <onboarding@resend.dev>';
   }
 
   async onModuleInit(): Promise<void> {
-    if (!this.transporter) return;
-    try {
-      await this.transporter.verify();
-      const from =
-        this.config.get('SMTP_FROM', { infer: true }) ?? 'noreply@ingobyi.com';
-      this.logger.log(
-        `SMTP ready (${this.config.get('SMTP_HOST', { infer: true })}, from: ${from})`,
-      );
-    } catch (err) {
+    if (!this.apiKey) {
       this.logger.error(
-        `SMTP verification failed: ${(err as Error).message}. Check SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM in .env`,
+        'RESEND_API_KEY is not set — emails (OTP, notifications) will not be sent',
       );
+      return;
     }
+    this.logger.log(`Resend email ready (from: ${this.fromAddress})`);
   }
 
   get frontendUrl() {
@@ -57,9 +40,7 @@ export class EmailService implements OnModuleInit {
     purpose: OtpPurpose,
   ): Promise<void> {
     const subject = `Ingobyi Academy — ${purpose.replace(/_/g, ' ').toLowerCase()}`;
-    await this.send(email, subject, templates.otpEmail(purpose, code), {
-      devLog: `OTP ${purpose}: ${code}`,
-    });
+    await this.send(email, subject, templates.otpEmail(purpose, code));
   }
 
   async sendOrgInvite(
@@ -166,36 +147,37 @@ export class EmailService implements OnModuleInit {
     );
   }
 
-  async send(
-    email: string,
-    subject: string,
-    html: string,
-    opts?: { devLog?: string },
-  ): Promise<void> {
-    const from =
-      this.config.get('SMTP_FROM', { infer: true }) ?? 'noreply@ingobyi.com';
-
-    if (!this.transporter) {
-      if (opts?.devLog) {
-        this.logger.warn(
-          `[DEV EMAIL] To: ${email} | ${subject} | ${opts.devLog}`,
-        );
-      } else {
-        this.logger.warn(
-          `Email skipped (SMTP not configured): ${email} — ${subject}`,
-        );
-      }
+  async send(email: string, subject: string, html: string): Promise<void> {
+    if (!this.apiKey) {
+      this.logger.error(`Email not sent (Resend not configured): ${email} — ${subject}`);
       return;
     }
 
     try {
-      await this.transporter.sendMail({ from, to: email, subject, html });
-      this.logger.log(`Email sent: ${email} — ${subject}`);
+      const response = await fetch(RESEND_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: this.fromAddress,
+          to: [email],
+          subject,
+          html,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Resend HTTP ${response.status}: ${body}`);
+      }
+
+      this.logger.log(`Email sent via Resend: ${email} — ${subject}`);
     } catch (err) {
       this.logger.error(
         `Failed to send email to ${email}: ${(err as Error).message}`,
       );
-      if (opts?.devLog) this.logger.warn(`[FALLBACK] ${opts.devLog}`);
     }
   }
 }

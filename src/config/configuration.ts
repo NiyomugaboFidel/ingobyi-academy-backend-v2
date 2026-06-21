@@ -10,12 +10,8 @@ export function normalizeEnv(
 ): Record<string, unknown> {
   const env = { ...raw };
 
-  if (!env.SMTP_FROM && env.EMAIL_FROM) {
-    env.SMTP_FROM = env.EMAIL_FROM;
-  }
-
-  if (typeof env.SMTP_PASS === 'string') {
-    env.SMTP_PASS = env.SMTP_PASS.replace(/\s+/g, '');
+  if (!env.EMAIL_FROM && env.SMTP_FROM) {
+    env.EMAIL_FROM = `Ingobyi Academy <${env.SMTP_FROM}>`;
   }
 
   const cloudinaryUrl = env.CLOUDINARY_URL;
@@ -61,18 +57,17 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_CALLBACK_URL: z.string().url().default(PRODUCTION_GOOGLE_CALLBACK_URL),
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().optional(),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().email().optional(),
+  /** Resend — https://resend.com */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  /** e.g. Ingobyi Academy <onboarding@resend.dev> or your verified domain */
+  EMAIL_FROM: z
+    .string()
+    .default('Ingobyi Academy <onboarding@resend.dev>'),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
   /** Parsed into individual CLOUDINARY_* vars when set (cloudinary://key:secret@cloud). */
   CLOUDINARY_URL: z.string().optional(),
-  /** Legacy alias for SMTP_FROM. */
-  EMAIL_FROM: z.string().email().optional(),
   THROTTLE_TTL: z.coerce.number().default(60),
   THROTTLE_LIMIT: z.coerce
     .number()
