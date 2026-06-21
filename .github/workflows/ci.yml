@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ingobyi
+          POSTGRES_PASSWORD: ingobyi_pass
+          POSTGRES_DB: ingobyi_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ingobyi -d ingobyi_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://ingobyi:ingobyi_pass@localhost:5432/ingobyi_db
+      JWT_SECRET: ci-test-jwt-secret-min-16-chars
+      REFRESH_SECRET: ci-test-refresh-secret-min-16-chars
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Run migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Seed database
+        working-directory: backend
+        run: npm run prisma:seed
+
+      - name: Unit tests
+        working-directory: backend
+        run: npm test
+
+      - name: E2E tests
+        working-directory: backend
+        run: npm run test:e2e
+
+      - name: Build
+        working-directory: backend
+        run: npm run build

@@ -1,0 +1,211 @@
+{
+  "info": {
+    "name": "Ingobyi Academy API",
+    "description": "NestJS + Prisma + PostgreSQL — full API collection.\n\nBase URL: http://localhost:3001/api\n\n1. Run Login (Superadmin) to get accessToken\n2. Token is auto-saved to collection variable\n3. Swagger: http://localhost:3001/api/docs\n4. Route index: http://localhost:3001/api/routes",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001/api" },
+    { "key": "accessToken", "value": "" },
+    { "key": "courseId", "value": "" },
+    { "key": "orgId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+        },
+        {
+          "name": "List All Routes",
+          "request": { "method": "GET", "url": "{{baseUrl}}/routes" }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (Superadmin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data && res.data.accessToken) {",
+                "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"super@ingobyi.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@test.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"New\",\n  \"lastName\": \"User\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": { "method": "POST", "url": "{{baseUrl}}/auth/logout" }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        { "name": "Get Me", "request": { "method": "GET", "url": "{{baseUrl}}/users/me" } },
+        {
+          "name": "Update Me",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"bio\": \"Learning enthusiast\"\n}" },
+            "url": "{{baseUrl}}/users/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        { "name": "List Organizations", "request": { "method": "GET", "url": "{{baseUrl}}/organizations" } },
+        {
+          "name": "Create Organization",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test School\",\n  \"type\": \"SCHOOL\",\n  \"country\": \"Rwanda\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations"
+          }
+        },
+        {
+          "name": "Public Org by Slug",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/organizations/slug/kigali-tech-school"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catalog (Public)",
+      "item": [
+        {
+          "name": "Search Courses",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/catalog?page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["catalog"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+          }
+        },
+        { "name": "Categories", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/catalog/categories" } },
+        { "name": "Featured", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/catalog/featured" } }
+      ]
+    },
+    {
+      "name": "Courses",
+      "item": [
+        { "name": "List Courses", "request": { "method": "GET", "url": "{{baseUrl}}/courses" } },
+        { "name": "Get Course", "request": { "method": "GET", "url": "{{baseUrl}}/courses/{{courseId}}" } }
+      ]
+    },
+    {
+      "name": "Enrollments",
+      "item": [
+        { "name": "My Enrollments", "request": { "method": "GET", "url": "{{baseUrl}}/enrollments/my" } },
+        {
+          "name": "Enroll",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"courseId\": \"{{courseId}}\"\n}" },
+            "url": "{{baseUrl}}/enrollments/enroll"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "item": [
+        { "name": "My Certificates", "request": { "method": "GET", "url": "{{baseUrl}}/certificates/mine" } },
+        {
+          "name": "Verify (Public)",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/certificates/verify/sample-code" }
+        }
+      ]
+    },
+    {
+      "name": "Community",
+      "item": [
+        { "name": "Feed", "request": { "method": "GET", "url": "{{baseUrl}}/community/feed" } },
+        {
+          "name": "Create Post",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Hello Ingobyi Academy!\"\n}" },
+            "url": "{{baseUrl}}/community/posts"
+          }
+        },
+        { "name": "Leaderboard", "request": { "method": "GET", "url": "{{baseUrl}}/community/leaderboard" } }
+      ]
+    },
+    {
+      "name": "Superadmin",
+      "item": [
+        { "name": "Platform Stats", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/stats" } },
+        { "name": "All Users", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/users" } },
+        { "name": "Pending Courses", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/courses/pending" } }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        { "name": "Platform Stats", "request": { "method": "GET", "url": "{{baseUrl}}/analytics/platform" } }
+      ]
+    },
+    {
+      "name": "Uploads",
+      "item": [
+        { "name": "Signed Image URL", "request": { "method": "POST", "url": "{{baseUrl}}/uploads/image" } },
+        { "name": "Signed Document URL", "request": { "method": "POST", "url": "{{baseUrl}}/uploads/document" } }
+      ]
+    }
+  ]
+}

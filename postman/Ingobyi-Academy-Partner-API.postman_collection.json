@@ -1,0 +1,312 @@
+{
+  "info": {
+    "name": "Ingobyi Academy — Partner API",
+    "description": "External integration API for course catalog, enrollments, learner progress, certificates, and achievements.\n\nBase URL: http://localhost:3001/api\nAuth: X-API-Key header (no JWT)\n\nAfter seeding (`npm run prisma:seed`), use the demo key in collection variable `partnerApiKey`.\n\nScopes:\n- COURSE_READ — courses, categories, curriculum\n- ENROLLMENT_READ — list/check enrollments\n- ENROLLMENT_WRITE — enroll learners\n- LEARNER_READ — progress, learning records, achievements\n- CERTIFICATE_VERIFY — verify certificate codes\n\nIndex: GET /api/partner\nSwagger: http://localhost:3001/api/docs (Partner API tag)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001/api" },
+    {
+      "key": "partnerApiKey",
+      "value": "ia_demo000000000000000000000000000000000000000000000000000000000000"
+    },
+    { "key": "courseId", "value": "" },
+    { "key": "courseSlug", "value": "intro-robotics-101" },
+    { "key": "learnerId", "value": "" },
+    { "key": "certificateCode", "value": "" }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "Overview",
+      "item": [
+        {
+          "name": "Partner API Index",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organization & Catalog",
+      "item": [
+        {
+          "name": "Get Organization (key scope)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/organization"
+          }
+        },
+        {
+          "name": "List Courses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const rows = res.data || res.items || res;",
+                  "if (Array.isArray(rows) && rows[0]?.id) {",
+                  "  pm.collectionVariables.set('courseId', rows[0].id);",
+                  "  if (rows[0].slug) pm.collectionVariables.set('courseSlug', rows[0].slug);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/partner/courses?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["partner", "courses"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "q", "value": "robotics", "disabled": true },
+                { "key": "level", "value": "BEGINNER", "disabled": true },
+                { "key": "category", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Course by Slug",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/courses/by-slug/{{courseSlug}}"
+          }
+        },
+        {
+          "name": "Get Course by ID (curriculum)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/courses/{{courseId}}"
+          }
+        },
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/categories"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Enrollments",
+      "item": [
+        {
+          "name": "List Enrollments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/partner/enrollments?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["partner", "enrollments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "learnerId", "value": "{{learnerId}}", "disabled": true },
+                { "key": "courseId", "value": "{{courseId}}", "disabled": true },
+                { "key": "status", "value": "ACTIVE", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Check Enrollment",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/partner/enrollments/check?learnerId={{learnerId}}&courseId={{courseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["partner", "enrollments", "check"],
+              "query": [
+                { "key": "learnerId", "value": "{{learnerId}}" },
+                { "key": "courseId", "value": "{{courseId}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Enroll Learner",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{learnerId}}\",\n  \"courseId\": \"{{courseId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/partner/enrollments"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Learners",
+      "item": [
+        {
+          "name": "Full Learning Record",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/learners/{{learnerId}}/learning"
+          }
+        },
+        {
+          "name": "Learner Enrollments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/learners/{{learnerId}}/enrollments"
+          }
+        },
+        {
+          "name": "Learner Course Progress",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/learners/{{learnerId}}/progress/{{courseId}}"
+          }
+        },
+        {
+          "name": "Learner Certificates",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/learners/{{learnerId}}/certificates"
+          }
+        },
+        {
+          "name": "Learner Achievements",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/learners/{{learnerId}}/achievements"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "item": [
+        {
+          "name": "Verify Certificate by Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{partnerApiKey}}" }
+            ],
+            "url": "{{baseUrl}}/partner/certificates/verify/{{certificateCode}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Setup Helpers (JWT — not Partner API)",
+      "description": "Use these once to populate learnerId and courseId variables. Requires main API login.",
+      "item": [
+        {
+          "name": "Login Superadmin (save JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data?.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"super@ingobyi.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Lookup Student User ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const users = res.data?.items || res.data || [];",
+                  "const student = users.find(u => u.email === 'student@ingobyi.com') || users[0];",
+                  "if (student?.id) pm.collectionVariables.set('learnerId', student.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?search=student@ingobyi.com&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "search", "value": "student@ingobyi.com" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
