@@ -4,19 +4,19 @@ node_modules/
 # Build
 dist/
 build/
+*.tsbuildinfo
 
-# Environment
+# Environment — never commit secrets
 .env
 .env.local
 .env.*.local
+!.env.example
+!.env.railway.example
 
-# IDE
+# IDE & OS
 .idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
+.vscode/*
+!.vscode/extensions.json
 .DS_Store
 Thumbs.db
 
@@ -25,14 +25,16 @@ logs/
 *.log
 npm-debug.log*
 
-# Test
+# Test & coverage
 coverage/
 .nyc_output/
 
-# Prisma
+# Prisma backups
 prisma/migrations/**/migration.sql.bak
 
-# Misc
+# Uploads & local storage
 uploads/
 storage/
-*.tsbuildinfo
+
+# Misc
+.cursor/
