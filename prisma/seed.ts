@@ -15,63 +15,26 @@ import { createHash } from 'crypto';
 const prisma = new PrismaClient();
 
 const TEST_PASSWORD = 'password123';
+const SAMPLE_VIDEO =
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
-const ROBOTICS_QUIZ = {
-  passingScore: 70,
-  questions: [
-    {
-      id: 'q1',
-      text: 'What is a robot?',
-      options: [
-        'A machine that can carry out tasks automatically',
-        'A type of plant',
-        'A programming language',
-        'A musical instrument',
-      ],
-      correctIndex: 0,
-    },
-    {
-      id: 'q2',
-      text: 'Which sensor helps a robot detect distance?',
-      options: ['Ultrasonic sensor', 'Thermometer', 'Speaker', 'Keyboard'],
-      correctIndex: 0,
-    },
-    {
-      id: 'q3',
-      text: 'What does programming a robot mean?',
-      options: [
-        'Giving instructions the robot can follow',
-        'Painting the robot',
-        'Charging the battery only',
-        'Removing its wheels',
-      ],
-      correctIndex: 0,
-    },
-  ],
+type QuizQuestion = {
+  text: string;
+  options: string[];
+  correctIndex: number;
 };
 
-const DIGITAL_QUIZ = {
-  passingScore: 60,
-  questions: [
-    {
-      id: 'd1',
-      text: 'What does CPU stand for?',
-      options: [
-        'Central Processing Unit',
-        'Computer Personal Utility',
-        'Central Power Usage',
-        'Core Program Unit',
-      ],
-      correctIndex: 0,
-    },
-    {
-      id: 'd2',
-      text: 'Which device stores files long-term?',
-      options: ['Hard drive or SSD', 'Monitor', 'Mouse', 'Webcam'],
-      correctIndex: 0,
-    },
-  ],
-};
+function buildQuiz(questions: QuizQuestion[], passingScore = 70) {
+  return JSON.stringify({
+    passingScore,
+    questions: questions.map((q, i) => ({
+      id: `q${i + 1}`,
+      text: q.text,
+      options: q.options,
+      correctIndex: q.correctIndex,
+    })),
+  });
+}
 
 type LessonSeed = {
   title: string;
@@ -80,18 +43,331 @@ type LessonSeed = {
   videoUrl?: string;
   content?: string;
   isFree?: boolean;
-  assignment?: {
-    title: string;
-    instructions: string;
-    maxScore?: number;
-  };
 };
 
-type ModuleSeed = {
+type CourseSeed = {
+  slug: string;
   title: string;
-  order: number;
+  shortDescription: string;
+  description: string;
+  categoryIndex: number;
+  level: string;
+  status: CourseStatus;
+  isFeatured?: boolean;
   lessons: LessonSeed[];
+  quiz: QuizQuestion[];
 };
+
+const COURSE_CATALOG: CourseSeed[] = [
+  {
+    slug: 'robotics-stem-fundamentals',
+    title: 'Robotics & STEM Fundamentals',
+    shortDescription: 'Build, code, and understand robots from zero to confident creator',
+    description:
+      '<p>Hands-on introduction to robotics for Rwandan schools and innovation hubs. Learn sensors, motors, and simple programming through video lessons and a practical quiz.</p>',
+    categoryIndex: 0,
+    level: 'BEGINNER',
+    status: CourseStatus.PUBLISHED,
+    isFeatured: true,
+    lessons: [
+      {
+        title: 'Welcome — Why robotics matters in Rwanda',
+        type: LessonType.VIDEO,
+        order: 1,
+        isFree: true,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Robot building blocks: sensors & actuators',
+        type: LessonType.TEXT,
+        order: 2,
+        content:
+          '<h3>Core components</h3><ul><li><strong>Sensors</strong> — eyes and ears (ultrasonic, light, touch)</li><li><strong>Actuators</strong> — muscles (motors, servos)</li><li><strong>Controller</strong> — the brain (microcontroller or single-board computer)</li></ul><p>Every robot loop: <em>sense → think → act</em>.</p>',
+      },
+      {
+        title: 'Programming your first robot behavior',
+        type: LessonType.VIDEO,
+        order: 3,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Safety, teamwork & project planning',
+        type: LessonType.TEXT,
+        order: 4,
+        content:
+          '<p>Before building, agree on roles, document your wiring, and always power off when changing connections. Good engineers communicate clearly with teammates and mentors.</p>',
+      },
+      {
+        title: 'Robotics knowledge check',
+        type: LessonType.QUIZ,
+        order: 5,
+      },
+    ],
+    quiz: [
+      {
+        text: 'What is the correct order of a robot control loop?',
+        options: ['Sense → Think → Act', 'Act → Sense → Think', 'Think → Act → Sense', 'Charge → Sleep → Repeat'],
+        correctIndex: 0,
+      },
+      {
+        text: 'Which component moves a robot wheel?',
+        options: ['Actuator (motor)', 'Thermometer', 'Keyboard', 'Monitor'],
+        correctIndex: 0,
+      },
+      {
+        text: 'Why use an ultrasonic sensor?',
+        options: ['To measure distance to objects', 'To play music', 'To store files', 'To connect Wi‑Fi'],
+        correctIndex: 0,
+      },
+    ],
+  },
+  {
+    slug: 'digital-literacy-rwanda',
+    title: 'Digital Literacy for Modern Rwanda',
+    shortDescription: 'Computer basics, online safety, and productivity skills for every learner',
+    description:
+      '<p>Essential digital skills — hardware, software, cloud tools, and safe internet habits — tailored for students and young professionals in Rwanda.</p>',
+    categoryIndex: 0,
+    level: 'BEGINNER',
+    status: CourseStatus.PUBLISHED,
+    lessons: [
+      {
+        title: 'Inside your computer & smartphone',
+        type: LessonType.VIDEO,
+        order: 1,
+        isFree: true,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Files, folders & cloud storage',
+        type: LessonType.TEXT,
+        order: 2,
+        content:
+          '<p>Organize school work with clear folder names, back up to Google Drive or OneDrive, and never rely on a single device. Use version dates in filenames: <code>Essay_2026-03-20.docx</code>.</p>',
+      },
+      {
+        title: 'Productivity: docs, sheets & slides',
+        type: LessonType.VIDEO,
+        order: 3,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Staying safe online',
+        type: LessonType.TEXT,
+        order: 4,
+        content:
+          '<ul><li>Use strong unique passwords + two-factor authentication</li><li>Verify sender identity before clicking links</li><li>Never share OTP codes</li><li>Report suspicious messages to your teacher or admin</li></ul>',
+      },
+      {
+        title: 'Digital literacy quiz',
+        type: LessonType.QUIZ,
+        order: 5,
+      },
+    ],
+    quiz: [
+      {
+        text: 'What does CPU stand for?',
+        options: ['Central Processing Unit', 'Computer Personal Utility', 'Central Power Usage', 'Core Program Unit'],
+        correctIndex: 0,
+      },
+      {
+        text: 'Best practice for important school files?',
+        options: ['Keep a backup in the cloud', 'Delete after saving once', 'Email only to yourself', 'Store on desktop only'],
+        correctIndex: 0,
+      },
+      {
+        text: 'You receive an urgent “verify your account” link. You should:',
+        options: ['Ignore and report — verify through the official app', 'Click immediately', 'Forward to all friends', 'Reply with your password'],
+        correctIndex: 0,
+      },
+    ],
+  },
+  {
+    slug: 'web-development-foundations',
+    title: 'Web Development Foundations',
+    shortDescription: 'HTML, CSS & JavaScript — build your first professional web pages',
+    description:
+      '<p>From first tag to interactive pages. Learn how the web works, structure content with HTML, style with CSS, and add behavior with JavaScript.</p>',
+    categoryIndex: 0,
+    level: 'INTERMEDIATE',
+    status: CourseStatus.PUBLISHED,
+    lessons: [
+      {
+        title: 'How the web works',
+        type: LessonType.VIDEO,
+        order: 1,
+        isFree: true,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'HTML structure & accessibility',
+        type: LessonType.TEXT,
+        order: 2,
+        content:
+          '<p>Use semantic tags: <code>&lt;header&gt;</code>, <code>&lt;main&gt;</code>, <code>&lt;nav&gt;</code>, <code>&lt;footer&gt;</code>. Add <code>alt</code> text on images and labels on form fields so everyone can use your site.</p>',
+      },
+      {
+        title: 'CSS layout & responsive design',
+        type: LessonType.VIDEO,
+        order: 3,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'JavaScript basics — variables & events',
+        type: LessonType.TEXT,
+        order: 4,
+        content:
+          '<p>JavaScript makes pages interactive. Start with <code>const</code> and <code>let</code>, select elements with <code>document.querySelector</code>, and respond to clicks with event listeners.</p>',
+      },
+      {
+        title: 'Web development quiz',
+        type: LessonType.QUIZ,
+        order: 5,
+      },
+    ],
+    quiz: [
+      {
+        text: 'Which language defines the structure of a web page?',
+        options: ['HTML', 'CSS', 'Python', 'SQL'],
+        correctIndex: 0,
+      },
+      {
+        text: 'CSS is mainly used for:',
+        options: ['Visual presentation and layout', 'Database queries', 'Server routing', 'Email delivery'],
+        correctIndex: 0,
+      },
+      {
+        text: 'Responsive design means:',
+        options: ['Pages adapt to different screen sizes', 'Pages load without internet', 'Pages never use images', 'Pages hide all text on mobile'],
+        correctIndex: 0,
+      },
+    ],
+  },
+  {
+    slug: 'entrepreneurship-business-basics',
+    title: 'Entrepreneurship & Business Basics',
+    shortDescription: 'Turn ideas into viable small businesses in the Rwandan market',
+    description:
+      '<p>Customer discovery, pricing, simple financial planning, and pitching — practical entrepreneurship for youth and community innovators.</p>',
+    categoryIndex: 1,
+    level: 'BEGINNER',
+    status: CourseStatus.PUBLISHED,
+    lessons: [
+      {
+        title: 'Mindset of an entrepreneur',
+        type: LessonType.VIDEO,
+        order: 1,
+        isFree: true,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Finding real customer problems',
+        type: LessonType.TEXT,
+        order: 2,
+        content:
+          '<p>Interview at least 10 potential customers before building. Ask about their current solutions, pain points, and willingness to pay. Document quotes verbatim.</p>',
+      },
+      {
+        title: 'Business model canvas walkthrough',
+        type: LessonType.VIDEO,
+        order: 3,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Pricing, costs & simple profit',
+        type: LessonType.TEXT,
+        order: 4,
+        content:
+          '<p>Revenue − Costs = Profit. Include transport, materials, time, and platform fees. Price for sustainability, not just popularity.</p>',
+      },
+      {
+        title: 'Entrepreneurship quiz',
+        type: LessonType.QUIZ,
+        order: 5,
+      },
+    ],
+    quiz: [
+      {
+        text: 'Before building a product you should:',
+        options: ['Validate the problem with real customers', 'Buy expensive equipment first', 'Skip research to move fast', 'Copy a competitor exactly'],
+        correctIndex: 0,
+      },
+      {
+        text: 'A business model canvas helps you:',
+        options: ['Map how you create and capture value', 'Design a company logo only', 'File taxes automatically', 'Hire staff without interviews'],
+        correctIndex: 0,
+      },
+      {
+        text: 'Sustainable pricing must cover:',
+        options: ['Costs plus a reasonable margin', 'Only marketing spend', 'Only rent', 'Nothing — free is always best'],
+        correctIndex: 0,
+      },
+    ],
+  },
+  {
+    slug: 'creative-arts-design-thinking',
+    title: 'Creative Arts & Design Thinking',
+    shortDescription: 'Express ideas through art, design process, and collaborative projects',
+    description:
+      '<p>Explore color, composition, storytelling, and human-centered design. Perfect for learners combining creativity with technology projects.</p>',
+    categoryIndex: 4,
+    level: 'ALL_LEVELS',
+    status: CourseStatus.PUBLISHED,
+    lessons: [
+      {
+        title: 'Introduction to design thinking',
+        type: LessonType.VIDEO,
+        order: 1,
+        isFree: true,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Color, contrast & visual hierarchy',
+        type: LessonType.TEXT,
+        order: 2,
+        content:
+          '<p>Use contrast to guide attention. Limit palettes to 2–3 primary colors plus neutrals. Headings should be clearly larger than body text.</p>',
+      },
+      {
+        title: 'Sketching & prototyping fast',
+        type: LessonType.VIDEO,
+        order: 3,
+        videoUrl: SAMPLE_VIDEO,
+      },
+      {
+        title: 'Presenting creative work with confidence',
+        type: LessonType.TEXT,
+        order: 4,
+        content:
+          '<p>Structure: problem → your idea → demo → next steps. Practice in pairs, time your pitch (3 minutes), and welcome feedback as improvement, not criticism.</p>',
+      },
+      {
+        title: 'Creative arts quiz',
+        type: LessonType.QUIZ,
+        order: 5,
+      },
+    ],
+    quiz: [
+      {
+        text: 'Design thinking starts with:',
+        options: ['Empathizing with users', 'Choosing fonts randomly', 'Ignoring feedback', 'Finalizing the logo first'],
+        correctIndex: 0,
+      },
+      {
+        text: 'Visual hierarchy helps users:',
+        options: ['Know what to read first', 'Disable accessibility', 'Hide navigation', 'Remove all colors'],
+        correctIndex: 0,
+      },
+      {
+        text: 'A low-fidelity prototype is:',
+        options: ['A quick rough model to test ideas', 'The final manufactured product', 'A legal contract', 'A printed certificate'],
+        correctIndex: 0,
+      },
+    ],
+  },
+];
+
+type ModuleSeed = { title: string; order: number; lessons: LessonSeed[] };
 
 async function resetCourseCurriculum(
   courseId: string,
@@ -111,7 +387,7 @@ async function resetCourseCurriculum(
     });
 
     for (const lessonSeed of modSeed.lessons) {
-      const lesson = await prisma.lesson.create({
+      await prisma.lesson.create({
         data: {
           moduleId: mod.id,
           title: lessonSeed.title,
@@ -123,19 +399,30 @@ async function resetCourseCurriculum(
           isPublished: published,
         },
       });
-
-      if (lessonSeed.assignment) {
-        await prisma.assignment.create({
-          data: {
-            lessonId: lesson.id,
-            title: lessonSeed.assignment.title,
-            instructions: lessonSeed.assignment.instructions,
-            maxScore: lessonSeed.assignment.maxScore ?? 100,
-          },
-        });
-      }
     }
   }
+}
+
+function courseToModules(seed: CourseSeed): ModuleSeed[] {
+  const lessons = seed.lessons.map((lesson) => {
+    if (lesson.type === LessonType.QUIZ) {
+      return { ...lesson, content: buildQuiz(seed.quiz) };
+    }
+    return lesson;
+  });
+
+  return [
+    {
+      title: 'Module 1 — Core lessons',
+      order: 1,
+      lessons: lessons.slice(0, 3),
+    },
+    {
+      title: 'Module 2 — Practice & assessment',
+      order: 2,
+      lessons: lessons.slice(3),
+    },
+  ];
 }
 
 async function upsertCourse(
@@ -213,409 +500,156 @@ async function main(): Promise<void> {
   };
 
   const primaryOrg = await prisma.organization.upsert({
-    where: { slug: 'kigali-tech-school' },
+    where: { slug: 'ingobyi-innovation-hub' },
     create: {
-      name: 'Kigali Tech School',
-      slug: 'kigali-tech-school',
-      type: OrganizationType.SCHOOL,
-      country: 'Rwanda',
-      city: 'Kigali',
-      isVerified: true,
-      settings: defaultCertificateSettings,
-    },
-    update: {
-      settings: defaultCertificateSettings,
-    },
-  });
-
-  await prisma.organization.upsert({
-    where: { slug: 'rwanda-training-center' },
-    create: {
-      name: 'Rwanda Training Center',
-      slug: 'rwanda-training-center',
+      name: 'Ingobyi Innovation Hub',
+      slug: 'ingobyi-innovation-hub',
       type: OrganizationType.TRAINING_CENTER,
       country: 'Rwanda',
       city: 'Kigali',
       isVerified: true,
+      settings: defaultCertificateSettings,
     },
-    update: {},
+    update: { settings: defaultCertificateSettings },
   });
 
   const superadmin = await prisma.user.upsert({
-    where: { email: 'super@ingobyi.com' },
+    where: { email: 'fidelniyomugabo67@gmail.com' },
     create: {
-      email: 'super@ingobyi.com',
+      email: 'fidelniyomugabo67@gmail.com',
       passwordHash,
-      firstName: 'Super',
-      lastName: 'Admin',
+      firstName: 'Niyomugabo',
+      lastName: 'Fidele',
       platformRole: UserRole.SUPERADMIN,
       isVerified: true,
     },
-    update: { passwordHash, isVerified: true },
+    update: { passwordHash, isVerified: true, firstName: 'Niyomugabo', lastName: 'Fidele' },
   });
 
-  const testAdmin = await prisma.user.upsert({
-    where: { email: 'admin@ingobyi.com' },
+  const admin = await prisma.user.upsert({
+    where: { email: 'cyubahirorichard250@gmail.com' },
     create: {
-      email: 'admin@ingobyi.com',
+      email: 'cyubahirorichard250@gmail.com',
       passwordHash,
-      firstName: 'Test',
-      lastName: 'Admin',
+      firstName: 'Cyubahiro',
+      lastName: 'Richard',
       isVerified: true,
     },
     update: { passwordHash, isVerified: true },
   });
 
-  const testTrainer = await prisma.user.upsert({
-    where: { email: 'trainer@ingobyi.com' },
+  const student = await prisma.user.upsert({
+    where: { email: 'holly.worshiptv@gmail.com' },
     create: {
-      email: 'trainer@ingobyi.com',
+      email: 'holly.worshiptv@gmail.com',
       passwordHash,
-      firstName: 'Test',
-      lastName: 'Trainer',
+      firstName: 'Holly',
+      lastName: 'Worship',
       isVerified: true,
     },
     update: { passwordHash, isVerified: true },
   });
 
-  const testStudent = await prisma.user.upsert({
-    where: { email: 'student@ingobyi.com' },
+  const parent = await prisma.user.upsert({
+    where: { email: 'nfidele290@gmail.com' },
     create: {
-      email: 'student@ingobyi.com',
+      email: 'nfidele290@gmail.com',
       passwordHash,
-      firstName: 'Test',
-      lastName: 'Student',
+      firstName: 'Niyomugabo',
+      lastName: 'Fidele',
       isVerified: true,
     },
     update: { passwordHash, isVerified: true },
   });
 
-  const testStudent2 = await prisma.user.upsert({
-    where: { email: 'student2@ingobyi.com' },
-    create: {
-      email: 'student2@ingobyi.com',
-      passwordHash,
-      firstName: 'Aline',
-      lastName: 'Uwase',
-      isVerified: true,
-    },
-    update: { passwordHash, isVerified: true },
+  await prisma.membership.upsert({
+    where: { userId_orgId: { userId: admin.id, orgId: primaryOrg.id } },
+    create: { userId: admin.id, orgId: primaryOrg.id, role: UserRole.ADMIN },
+    update: { role: UserRole.ADMIN },
   });
 
-  const testParent = await prisma.user.upsert({
-    where: { email: 'parent@ingobyi.com' },
-    create: {
-      email: 'parent@ingobyi.com',
-      passwordHash,
-      firstName: 'Test',
-      lastName: 'Parent',
-      isVerified: true,
-    },
-    update: { passwordHash, isVerified: true },
+  await prisma.membership.upsert({
+    where: { userId_orgId: { userId: student.id, orgId: primaryOrg.id } },
+    create: { userId: student.id, orgId: primaryOrg.id, role: UserRole.STUDENT },
+    update: { role: UserRole.STUDENT },
   });
 
-  const pendingUser = await prisma.user.upsert({
-    where: { email: 'pending@ingobyi.com' },
-    create: {
-      email: 'pending@ingobyi.com',
-      passwordHash,
-      firstName: 'Pending',
-      lastName: 'Applicant',
-      isVerified: true,
-    },
-    update: { passwordHash, isVerified: true },
+  await prisma.membership.upsert({
+    where: { userId_orgId: { userId: parent.id, orgId: primaryOrg.id } },
+    create: { userId: parent.id, orgId: primaryOrg.id, role: UserRole.PARENT },
+    update: { role: UserRole.PARENT },
   });
-
-  for (const [user, role] of [
-    [testAdmin, UserRole.ADMIN],
-    [testTrainer, UserRole.TRAINER],
-    [testStudent, UserRole.STUDENT],
-    [testStudent2, UserRole.STUDENT],
-    [testParent, UserRole.PARENT],
-  ] as const) {
-    await prisma.membership.upsert({
-      where: { userId_orgId: { userId: user.id, orgId: primaryOrg.id } },
-      create: { userId: user.id, orgId: primaryOrg.id, role },
-      update: { role },
-    });
-  }
 
   await prisma.parentChildLink.upsert({
-    where: { parentId_childId: { parentId: testParent.id, childId: testStudent.id } },
-    create: {
-      parentId: testParent.id,
-      childId: testStudent.id,
-      approvedAt: new Date(),
-    },
+    where: { parentId_childId: { parentId: parent.id, childId: student.id } },
+    create: { parentId: parent.id, childId: student.id, approvedAt: new Date() },
     update: { approvedAt: new Date() },
   });
 
-  // ── Four primary-org courses for full role testing ──────────────────
-
-  const introRobotics = await upsertCourse(
-    {
-      slug: 'intro-robotics-101',
-      title: 'Introduction to Robotics 101',
-      description:
-        '<p>Learn robotics fundamentals through video lessons, reading, a quiz, and a hands-on assignment. Complete all lessons to earn your certificate.</p>',
-      shortDescription: 'Build your first robot — video, quiz & assignment path',
-      status: CourseStatus.PUBLISHED,
-      type: CourseType.SELF_PACED,
-      level: 'BEGINNER',
-      org: { connect: { id: primaryOrg.id } },
-      category: { connect: { id: categories[0].id } },
-      isFeatured: true,
-    },
-    [
+  const courses = [];
+  for (const def of COURSE_CATALOG) {
+    const course = await upsertCourse(
       {
-        title: 'Module 1 — Getting started',
-        order: 1,
-        lessons: [
-          {
-            title: 'Welcome to Robotics',
-            type: LessonType.VIDEO,
-            order: 1,
-            isFree: true,
-            videoUrl: 'https://www.youtube.com/watch?v=saNKgCYX3FM',
-          },
-          {
-            title: 'What is a robot?',
-            type: LessonType.TEXT,
-            order: 2,
-            content:
-              '<p>A <strong>robot</strong> is a machine that can sense its environment, process information, and act on the world. In this course you will learn the building blocks: sensors, actuators, and control programs.</p><p>By the end you will design a simple robot plan and submit it for trainer review.</p>',
-          },
-        ],
+        slug: def.slug,
+        title: def.title,
+        description: def.description,
+        shortDescription: def.shortDescription,
+        status: def.status,
+        type: CourseType.SELF_PACED,
+        level: def.level,
+        org: { connect: { id: primaryOrg.id } },
+        category: { connect: { id: categories[def.categoryIndex].id } },
+        isFeatured: def.isFeatured ?? false,
       },
-      {
-        title: 'Module 2 — Assessment',
-        order: 2,
-        lessons: [
-          {
-            title: 'Robotics knowledge check',
-            type: LessonType.QUIZ,
-            order: 1,
-            content: JSON.stringify(ROBOTICS_QUIZ),
-          },
-          {
-            title: 'Design your robot plan',
-            type: LessonType.ASSIGNMENT,
-            order: 2,
-            assignment: {
-              title: 'Robot design proposal',
-              instructions:
-                '<p>Write a short proposal (200+ words) describing a robot you would build for your school. Include:</p><ul><li>Purpose of the robot</li><li>Sensors needed</li><li>One challenge you expect</li></ul><p>Your trainer will review and grade this before you can finish the course.</p>',
-              maxScore: 100,
-            },
-          },
-        ],
-      },
-    ],
-    testTrainer.id,
-  );
-
-  const digitalLiteracy = await upsertCourse(
-    {
-      slug: 'digital-literacy-basics',
-      title: 'Digital Literacy Basics',
-      description: '<p>Essential computer skills for students — hardware, software, and safe online habits.</p>',
-      shortDescription: 'Computer basics for beginners',
-      status: CourseStatus.PUBLISHED,
-      type: CourseType.SELF_PACED,
-      level: 'BEGINNER',
-      org: { connect: { id: primaryOrg.id } },
-      category: { connect: { id: categories[0].id } },
-    },
-    [
-      {
-        title: 'Module 1 — Computer fundamentals',
-        order: 1,
-        lessons: [
-          {
-            title: 'Inside a computer',
-            type: LessonType.VIDEO,
-            order: 1,
-            isFree: true,
-            videoUrl: 'https://www.youtube.com/watch?v=ExxFxD4OSZ0',
-          },
-          {
-            title: 'Staying safe online',
-            type: LessonType.TEXT,
-            order: 2,
-            content:
-              '<p>Learn to create strong passwords, recognize phishing, and protect your personal information online.</p>',
-          },
-          {
-            title: 'Digital literacy quiz',
-            type: LessonType.QUIZ,
-            order: 3,
-            content: JSON.stringify(DIGITAL_QUIZ),
-          },
-        ],
-      },
-    ],
-    testTrainer.id,
-  );
-
-  const webDevPending = await upsertCourse(
-    {
-      slug: 'web-development-fundamentals',
-      title: 'Web Development Fundamentals',
-      description: '<p>HTML, CSS, and JavaScript for building modern websites. Awaiting admin approval.</p>',
-      shortDescription: 'Learn to build websites from scratch',
-      status: CourseStatus.PENDING_REVIEW,
-      type: CourseType.SELF_PACED,
-      level: 'INTERMEDIATE',
-      org: { connect: { id: primaryOrg.id } },
-      category: { connect: { id: categories[0].id } },
-    },
-    [
-      {
-        title: 'Module 1 — Web basics',
-        order: 1,
-        lessons: [
-          {
-            title: 'How the web works',
-            type: LessonType.VIDEO,
-            order: 1,
-            videoUrl: 'https://www.youtube.com/watch?v=HGTWB3Fl_qc',
-          },
-          {
-            title: 'HTML structure',
-            type: LessonType.TEXT,
-            order: 2,
-            content: '<p>HTML tags, elements, and semantic structure for accessible web pages.</p>',
-          },
-        ],
-      },
-    ],
-    testTrainer.id,
-  );
-
-  const creativeDraft = await upsertCourse(
-    {
-      slug: 'creative-coding-studio',
-      title: 'Creative Coding Studio',
-      description: '<p>Draft course — trainer is still building curriculum.</p>',
-      shortDescription: 'Art meets code (draft)',
-      status: CourseStatus.DRAFT,
-      type: CourseType.SELF_PACED,
-      level: 'BEGINNER',
-      org: { connect: { id: primaryOrg.id } },
-      category: { connect: { id: categories[4].id } },
-    },
-    [
-      {
-        title: 'Module 1 — Ideas',
-        order: 1,
-        lessons: [
-          {
-            title: 'What is creative coding?',
-            type: LessonType.TEXT,
-            order: 1,
-            content: '<p>Creative coding combines programming with visual art, music, and interactive design.</p>',
-          },
-        ],
-      },
-    ],
-    testTrainer.id,
-  );
-
-  // ── Enrollments ─────────────────────────────────────────────────────
-
-  await enrollUser(testStudent.id, introRobotics.id);
-  await enrollUser(testStudent.id, digitalLiteracy.id);
-  await enrollUser(testStudent2.id, introRobotics.id);
-  await enrollUser(testStudent2.id, digitalLiteracy.id);
-
-  // student2: partial progress on digital literacy (lesson 1 complete)
-  const digitalLessons = await prisma.lesson.findMany({
-    where: { module: { courseId: digitalLiteracy.id } },
-    orderBy: { order: 'asc' },
-  });
-  const student2DigitalEnrollment = await prisma.enrollment.findUnique({
-    where: { userId_courseId: { userId: testStudent2.id, courseId: digitalLiteracy.id } },
-  });
-  if (student2DigitalEnrollment && digitalLessons[0]) {
-    await prisma.lessonProgress.upsert({
-      where: {
-        enrollmentId_lessonId: {
-          enrollmentId: student2DigitalEnrollment.id,
-          lessonId: digitalLessons[0].id,
-        },
-      },
-      create: {
-        enrollmentId: student2DigitalEnrollment.id,
-        lessonId: digitalLessons[0].id,
-        isCompleted: true,
-        completedAt: new Date(),
-        watchedSec: 420,
-      },
-      update: { isCompleted: true, completedAt: new Date(), watchedSec: 420 },
-    });
+      courseToModules(def),
+      admin.id,
+    );
+    courses.push(course);
+    await enrollUser(student.id, course.id);
   }
 
-  // student2: submitted assignment on intro robotics (waiting for trainer grade)
-  const assignmentLesson = await prisma.lesson.findFirst({
-    where: { module: { courseId: introRobotics.id }, type: LessonType.ASSIGNMENT },
-    include: { assignment: true },
+  await prisma.communityPost.deleteMany({
+    where: { orgId: primaryOrg.id },
   });
-  if (assignmentLesson?.assignment) {
-    await prisma.submission.upsert({
-      where: {
-        assignmentId_userId: {
-          assignmentId: assignmentLesson.assignment.id,
-          userId: testStudent2.id,
-        },
-      },
-      create: {
-        assignmentId: assignmentLesson.assignment.id,
-        userId: testStudent2.id,
-        textContent:
-          'I would build a school hallway navigation robot with ultrasonic sensors to help new students find classrooms. Main challenge: accurate distance reading in crowded corridors.',
-        submittedAt: new Date(),
-      },
-      update: {
-        textContent:
-          'I would build a school hallway navigation robot with ultrasonic sensors to help new students find classrooms. Main challenge: accurate distance reading in crowded corridors.',
-        submittedAt: new Date(),
-      },
-    });
-  }
 
-  // ── Join request (admin approval testing) ───────────────────────────
-
-  const existingJoinRequest = await prisma.orgJoinRequest.findFirst({
-    where: { orgId: primaryOrg.id, userId: pendingUser.id, status: 'PENDING' },
-  });
-  if (!existingJoinRequest) {
-    await prisma.orgJoinRequest.create({
-      data: {
+  await prisma.communityPost.createMany({
+    data: [
+      {
+        authorId: student.id,
         orgId: primaryOrg.id,
-        userId: pendingUser.id,
-        requestedRole: UserRole.STUDENT,
-        message: 'I am a student at a partner school and would like to join Kigali Tech School.',
-        status: 'PENDING',
+        content:
+          'Just enrolled in Robotics & STEM Fundamentals — excited to learn with Ingobyi Academy! 🚀',
+      },
+      {
+        authorId: admin.id,
+        orgId: primaryOrg.id,
+        content:
+          'Welcome testers! All five demo courses are live with 5 lessons each. Complete the quiz at the end of every course to earn progress.',
+      },
+      {
+        authorId: superadmin.id,
+        orgId: primaryOrg.id,
+        content:
+          'Platform ready for UAT. Report any issues to the admin team. Happy learning!',
+      },
+    ],
+  });
+
+  const existingAnnouncement = await prisma.announcement.findFirst({
+    where: { title: 'Welcome to Ingobyi Academy — Demo Ready' },
+  });
+  if (!existingAnnouncement) {
+    await prisma.announcement.create({
+      data: {
+        title: 'Welcome to Ingobyi Academy — Demo Ready',
+        content:
+          '<p>Five full test courses are now available. Log in, enroll, complete lessons, and pass each 3-question quiz. Password for all demo accounts: <strong>password123</strong>.</p>',
+        scope: 'PLATFORM',
+        authorId: superadmin.id,
+        publishedAt: new Date(),
       },
     });
   }
-
-  // ── Moderation test data ────────────────────────────────────────────
-
-  await prisma.issueReport.deleteMany({
-    where: { title: 'Inappropriate comment in community feed' },
-  });
-  await prisma.issueReport.create({
-    data: {
-      userId: testStudent2.id,
-      type: 'CONTENT',
-      title: 'Inappropriate comment in community feed',
-      description: 'A community post contains language that should be reviewed by moderators.',
-      status: 'OPEN',
-    },
-  });
-
-  // ── Achievements, community, announcements ──────────────────────────
 
   await prisma.achievementDefinition.createMany({
     data: [
@@ -627,113 +661,19 @@ async function main(): Promise<void> {
         points: 50,
       },
       {
-        title: 'Streak Master',
-        description: '7-day learning streak',
-        trigger: AchievementTrigger.STREAK_DAYS,
-        threshold: 7,
+        title: 'Quiz Master',
+        description: 'Pass three course quizzes',
+        trigger: AchievementTrigger.LESSONS_COMPLETED,
+        threshold: 3,
         points: 30,
       },
     ],
     skipDuplicates: true,
   });
 
-  await prisma.communityPost.deleteMany({
-    where: {
-      authorId: { in: [testStudent.id, testTrainer.id, testStudent2.id] },
-      orgId: primaryOrg.id,
-    },
-  });
-
-  await prisma.communityPost.createMany({
-    data: [
-      {
-        authorId: testStudent.id,
-        content: 'Excited to start Introduction to Robotics 101! Who else is enrolled?',
-        orgId: primaryOrg.id,
-      },
-      {
-        authorId: testTrainer.id,
-        content: 'Welcome students! Submit your robot design assignment when you reach Module 2 — I will grade within 24 hours.',
-        orgId: primaryOrg.id,
-      },
-      {
-        authorId: testStudent2.id,
-        content: 'Just finished the first digital literacy video. Great explanation of computer parts!',
-        orgId: primaryOrg.id,
-      },
-    ],
-  });
-
-  const existingAnnouncement = await prisma.announcement.findFirst({
-    where: { title: 'Welcome to Ingobyi Academy' },
-  });
-  if (!existingAnnouncement) {
-    await prisma.announcement.create({
-      data: {
-        title: 'Welcome to Ingobyi Academy',
-        content:
-          'Your multi-tenant learning platform is ready. Explore courses, join organizations, and start learning today!',
-        scope: 'PLATFORM',
-        authorId: superadmin.id,
-        publishedAt: new Date(),
-      },
-    });
-  }
-
-  // Sample course reviews for ratings UI
-  await prisma.enrollment.updateMany({
-    where: { userId: testStudent2.id, courseId: digitalLiteracy.id },
-    data: { status: 'COMPLETED', completedAt: new Date() },
-  });
-
-  const reviewSeeds = [
-    {
-      userId: testStudent2.id,
-      courseId: digitalLiteracy.id,
-      rating: 5,
-      comment: 'Clear lessons and practical examples. Great for beginners.',
-    },
-    {
-      userId: testStudent.id,
-      courseId: introRobotics.id,
-      rating: 4,
-      comment: 'Hands-on robotics content is excellent. Assignment grading took a little time.',
-    },
-    {
-      userId: testAdmin.id,
-      courseId: introRobotics.id,
-      rating: 5,
-      comment: 'Well structured modules and strong trainer support.',
-    },
-  ] as const;
-
-  for (const review of reviewSeeds) {
-    await prisma.courseReview.upsert({
-      where: {
-        userId_courseId: {
-          userId: review.userId,
-          courseId: review.courseId,
-        },
-      },
-      create: review,
-      update: {
-        rating: review.rating,
-        comment: review.comment,
-        isVisible: true,
-      },
-    });
-  }
-
   const DEMO_PARTNER_API_KEY =
     'ia_demo000000000000000000000000000000000000000000000000000000000000';
   const demoKeyHash = createHash('sha256').update(DEMO_PARTNER_API_KEY).digest('hex');
-  const partnerScopes = [
-    ApiKeyScope.COURSE_READ,
-    ApiKeyScope.ENROLLMENT_READ,
-    ApiKeyScope.ENROLLMENT_WRITE,
-    ApiKeyScope.CERTIFICATE_VERIFY,
-    ApiKeyScope.LEARNER_READ,
-  ];
 
   await prisma.apiKey.upsert({
     where: { keyHash: demoKeyHash },
@@ -743,50 +683,34 @@ async function main(): Promise<void> {
       keyPrefix: DEMO_PARTNER_API_KEY.slice(0, 8),
       userId: superadmin.id,
       orgId: primaryOrg.id,
-      scopes: partnerScopes,
+      scopes: [
+        ApiKeyScope.COURSE_READ,
+        ApiKeyScope.ENROLLMENT_READ,
+        ApiKeyScope.ENROLLMENT_WRITE,
+        ApiKeyScope.CERTIFICATE_VERIFY,
+        ApiKeyScope.LEARNER_READ,
+      ],
     },
-    update: {
-      isActive: true,
-      orgId: primaryOrg.id,
-      scopes: partnerScopes,
-    },
+    update: { isActive: true, orgId: primaryOrg.id },
   });
 
   console.log('');
   console.log('Seed complete.');
   console.log('');
-  console.log('Test accounts (password for all: ' + TEST_PASSWORD + ')');
+  console.log('Demo accounts (password: ' + TEST_PASSWORD + ')');
   console.log('-------------------------------------------------------');
-  console.log('SUPERADMIN  super@ingobyi.com');
-  console.log('ADMIN       admin@ingobyi.com       → approve courses & join requests');
-  console.log('TRAINER     trainer@ingobyi.com     → grade student2 assignment');
-  console.log('STUDENT     student@ingobyi.com     → full learning path (fresh start)');
-  console.log('STUDENT 2   student2@ingobyi.com    → assignment pending grade');
-  console.log('PARENT      parent@ingobyi.com      → linked to student@ingobyi.com');
-  console.log('APPLICANT   pending@ingobyi.com     → pending org join request');
+  console.log('SUPERADMIN  fidelniyomugabo67@gmail.com');
+  console.log('ADMIN       cyubahirorichard250@gmail.com');
+  console.log('STUDENT     holly.worshiptv@gmail.com     → enrolled in all 5 courses');
+  console.log('PARENT      nfidele290@gmail.com          → linked to Holly');
   console.log('-------------------------------------------------------');
   console.log('');
-  console.log('Four courses in Kigali Tech School:');
-  console.log('  1. intro-robotics-101          PUBLISHED  ← main test course');
-  console.log('  2. digital-literacy-basics     PUBLISHED');
-  console.log('  3. web-development-fundamentals PENDING_REVIEW ← admin approval');
-  console.log('  4. creative-coding-studio      DRAFT');
+  console.log('Five published courses (5 lessons + 3-question quiz each):');
+  for (const c of courses) {
+    console.log(`  • ${c.slug}`);
+  }
   console.log('');
-  console.log('Student test flow (student@ingobyi.com):');
-  console.log('  1. /student/enrolled → open Introduction to Robotics 101');
-  console.log('  2. Watch video → read text → pass quiz (70%+)');
-  console.log('  3. Submit assignment → trainer@ grades it');
-  console.log('  4. Get certificate at /student/certificates');
-  console.log('');
-  console.log(`Primary org: ${primaryOrg.name} (${primaryOrg.slug})`);
-  console.log(`Flagship course ID: ${introRobotics.id}`);
-  console.log('');
-  console.log('Partner API (external systems):');
-  console.log('  Header: X-API-Key');
-  console.log(`  Demo key: ${DEMO_PARTNER_API_KEY}`);
-  console.log(`  Org-scoped to: ${primaryOrg.slug}`);
-  console.log('  Postman: backend/postman/Ingobyi-Academy-Partner-API.postman_collection.json');
-  console.log('  Docs: GET /api/partner');
+  console.log(`Organization: ${primaryOrg.name}`);
 }
 
 main()

@@ -12,12 +12,13 @@ import { JwtService } from '@nestjs/jwt';
 import { PresenceStatus } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
 import { JwtPayload } from '../../common/interfaces/request-with-user.interface';
+import { PRODUCTION_FRONTEND_URL } from '../../common/constants/app-urls';
 import { MessagesService } from '../messaging/messages.service';
 import { PresenceService } from '../messaging/presence.service';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || true,
+    origin: process.env.FRONTEND_URL || PRODUCTION_FRONTEND_URL,
     credentials: true,
   },
 })

@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  PRODUCTION_FRONTEND_URL,
+  PRODUCTION_GOOGLE_CALLBACK_URL,
+} from '../common/constants/app-urls';
 
 /** Normalize legacy/alternate env names before Zod validation. */
 export function normalizeEnv(
@@ -35,7 +39,7 @@ const envSchema = z.object({
     .enum(['development', 'production', 'test', 'staging'])
     .default('development'),
   PORT: z.coerce.number().default(3001),
-  FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+  FRONTEND_URL: z.string().url().default(PRODUCTION_FRONTEND_URL),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().default('1h'),
@@ -56,7 +60,7 @@ const envSchema = z.object({
     .default('false'),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_CALLBACK_URL: z.string().url().optional(),
+  GOOGLE_CALLBACK_URL: z.string().url().default(PRODUCTION_GOOGLE_CALLBACK_URL),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),

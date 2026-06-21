@@ -378,10 +378,11 @@ export class AuthService {
 
   private cookieOptions() {
     const domain = this.config.get('COOKIE_DOMAIN', { infer: true });
+    const secure = this.config.get('COOKIE_SECURE', { infer: true });
     return {
       httpOnly: true as const,
-      secure: this.config.get('COOKIE_SECURE', { infer: true }),
-      sameSite: 'lax' as const,
+      secure,
+      sameSite: (secure ? 'none' : 'lax') as 'none' | 'lax',
       path: '/api/auth',
       ...(domain ? { domain } : {}),
     };

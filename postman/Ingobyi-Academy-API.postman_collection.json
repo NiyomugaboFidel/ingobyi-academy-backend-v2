@@ -1,11 +1,11 @@
 {
   "info": {
     "name": "Ingobyi Academy API",
-    "description": "NestJS + Prisma + PostgreSQL — full API collection.\n\nBase URL: http://localhost:3001/api\n\n1. Run Login (Superadmin) to get accessToken\n2. Token is auto-saved to collection variable\n3. Swagger: http://localhost:3001/api/docs\n4. Route index: http://localhost:3001/api/routes",
+    "description": "NestJS + Prisma + PostgreSQL — full API collection.\n\nBase URL: https://ingobyi-academy-backend-v2-production.up.railway.app/api\n\n1. Run Login (Superadmin) to get accessToken\n2. Token is auto-saved to collection variable\n3. Swagger: https://ingobyi-academy-backend-v2-production.up.railway.app/api/docs\n4. Route index: https://ingobyi-academy-backend-v2-production.up.railway.app/api/routes",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3001/api" },
+    { "key": "baseUrl", "value": "https://ingobyi-academy-backend-v2-production.up.railway.app/api" },
     { "key": "accessToken", "value": "" },
     { "key": "courseId", "value": "" },
     { "key": "orgId", "value": "" }

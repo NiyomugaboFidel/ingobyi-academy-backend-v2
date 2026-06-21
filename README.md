@@ -30,10 +30,11 @@ npm run prisma:migrate
 npm run start:dev
 ```
 
-API: `http://localhost:3001/api`  
-Swagger: `http://localhost:3001/api/docs`  
-Route index: `http://localhost:3001/api/routes`  
-Health: `http://localhost:3001/api/health`
+API: `https://ingobyi-academy-backend-v2-production.up.railway.app/api`  
+Swagger: `https://ingobyi-academy-backend-v2-production.up.railway.app/api/docs`  
+Route index: `https://ingobyi-academy-backend-v2-production.up.railway.app/api/routes`  
+Health: `https://ingobyi-academy-backend-v2-production.up.railway.app/api/health`  
+Frontend: `https://ingobyi-academy-frontend-v2.vercel.app`
 
 ## Testing
 
@@ -60,11 +61,10 @@ After `npm run prisma:seed`, use password `password123` for all:
 
 | Role | Email |
 |------|-------|
-| Superadmin | `super@ingobyi.com` |
-| Admin | `admin@ingobyi.com` |
-| Trainer | `trainer@ingobyi.com` |
-| Student | `student@ingobyi.com` |
-| Parent | `parent@ingobyi.com` (linked to student) |
+| Superadmin | `fidelniyomugabo67@gmail.com` |
+| Admin | `cyubahirorichard250@gmail.com` |
+| Student | `holly.worshiptv@gmail.com` |
+| Parent | `nfidele290@gmail.com` (linked to Holly) |
 
 ## Project Structure
 

@@ -5,6 +5,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import {
+  PRODUCTION_API_URL,
+  PRODUCTION_FRONTEND_URL,
+} from './common/constants/app-urls';
 import { EnvConfig } from './config/configuration';
 
 async function bootstrap(): Promise<void> {
@@ -14,6 +18,7 @@ async function bootstrap(): Promise<void> {
   const port = config.get('PORT', { infer: true });
   const frontendUrl = config.get('FRONTEND_URL', { infer: true });
   const nodeEnv = config.get('NODE_ENV', { infer: true });
+  const apiPublicUrl = PRODUCTION_API_URL;
 
   app.setGlobalPrefix('api');
   if (nodeEnv === 'production' || nodeEnv === 'staging') {
@@ -57,11 +62,7 @@ async function bootstrap(): Promise<void> {
       )
       .setVersion('1.0.0')
       .setContact('Ingobyi Academy', frontendUrl, 'support@ingobyi.com')
-      .addServer(`http://localhost:${port}/api`, 'Local development')
-      .addServer(
-        frontendUrl.replace(/:\d+$/, `:${port}`) + '/api',
-        'Configured host',
-      )
+      .addServer(apiPublicUrl, 'Production (Railway)')
       .addBearerAuth(
         {
           type: 'http',
@@ -104,12 +105,14 @@ async function bootstrap(): Promise<void> {
       customSiteTitle: 'Ingobyi Academy API Docs',
     });
 
-    console.log(`Swagger docs:  http://localhost:${port}/api/docs`);
+    console.log(`Swagger docs:  ${apiPublicUrl.replace(/\/api$/, '')}/api/docs`);
   }
 
   await app.listen(port, '0.0.0.0');
   console.log(`Ingobyi Academy API running on port ${port} (${nodeEnv})`);
-  console.log(`Route index:   http://localhost:${port}/api/routes`);
+  console.log(`Public API:    ${apiPublicUrl}`);
+  console.log(`Frontend:      ${frontendUrl}`);
+  console.log(`Route index:   ${apiPublicUrl.replace(/\/api$/, '')}/api/routes`);
 }
 
 bootstrap();
