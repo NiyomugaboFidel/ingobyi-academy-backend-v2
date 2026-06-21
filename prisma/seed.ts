@@ -18,6 +18,44 @@ const TEST_PASSWORD = 'password123';
 const SAMPLE_VIDEO =
   'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
+const UAT_TESTERS: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+}[] = [
+  {
+    email: 'ngirinshutingirimana858@gmail.com',
+    firstName: 'Ngirinshuti',
+    lastName: 'Ngirimana',
+    role: UserRole.STUDENT,
+  },
+  {
+    email: 'robertmunyaburanga8@gmail.com',
+    firstName: 'Robert',
+    lastName: 'Munyaburanga',
+    role: UserRole.STUDENT,
+  },
+  {
+    email: 'kellymshema@gmail.com',
+    firstName: 'Kelly',
+    lastName: 'Shema',
+    role: UserRole.STUDENT,
+  },
+  {
+    email: 'manzitms209@gmail.com',
+    firstName: 'Manzi',
+    lastName: 'TMC',
+    role: UserRole.TRAINER,
+  },
+  {
+    email: 'niyobuhungirooscar40@gmail.com',
+    firstName: 'Oscar',
+    lastName: 'Niyobuhungiro',
+    role: UserRole.STUDENT,
+  },
+];
+
 type QuizQuestion = {
   text: string;
   options: string[];
@@ -565,8 +603,36 @@ async function main(): Promise<void> {
   await prisma.membership.upsert({
     where: { userId_orgId: { userId: admin.id, orgId: primaryOrg.id } },
     create: { userId: admin.id, orgId: primaryOrg.id, role: UserRole.ADMIN },
-    update: { role: UserRole.ADMIN },
+    update: { role: UserRole.ADMIN, status: 'ACTIVE' },
   });
+
+  for (const tester of UAT_TESTERS) {
+    const testerUser = await prisma.user.upsert({
+      where: { email: tester.email },
+      create: {
+        email: tester.email,
+        passwordHash,
+        firstName: tester.firstName,
+        lastName: tester.lastName,
+        isVerified: true,
+      },
+      update: {
+        passwordHash,
+        isVerified: true,
+        firstName: tester.firstName,
+        lastName: tester.lastName,
+      },
+    });
+    await prisma.membership.upsert({
+      where: { userId_orgId: { userId: testerUser.id, orgId: primaryOrg.id } },
+      create: {
+        userId: testerUser.id,
+        orgId: primaryOrg.id,
+        role: tester.role,
+      },
+      update: { role: tester.role, status: 'ACTIVE' },
+    });
+  }
 
   await prisma.membership.upsert({
     where: { userId_orgId: { userId: student.id, orgId: primaryOrg.id } },
@@ -700,9 +766,15 @@ async function main(): Promise<void> {
   console.log('Demo accounts (password: ' + TEST_PASSWORD + ')');
   console.log('-------------------------------------------------------');
   console.log('SUPERADMIN  fidelniyomugabo67@gmail.com');
-  console.log('ADMIN       cyubahirorichard250@gmail.com');
-  console.log('STUDENT     holly.worshiptv@gmail.com     → enrolled in all 5 courses');
-  console.log('PARENT      nfidele290@gmail.com          → linked to Holly');
+  console.log('ADMIN       cyubahirorichard250@gmail.com     → Ingobyi Innovation Hub admin');
+  console.log('TRAINER     manzitms209@gmail.com             → Ingobyi Innovation Hub trainer');
+  console.log('STUDENT     holly.worshiptv@gmail.com         → enrolled in all 5 courses');
+  console.log('PARENT      nfidele290@gmail.com              → linked to Holly');
+  console.log('-------------------------------------------------------');
+  console.log('UAT testers (password: ' + TEST_PASSWORD + ', all verified, no email OTP):');
+  for (const t of UAT_TESTERS) {
+    console.log(`  ${t.role.padEnd(10)} ${t.email}`);
+  }
   console.log('-------------------------------------------------------');
   console.log('');
   console.log('Five published courses (5 lessons + 3-question quiz each):');

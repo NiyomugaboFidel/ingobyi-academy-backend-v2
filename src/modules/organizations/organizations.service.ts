@@ -547,6 +547,32 @@ export class OrganizationsService {
     });
   }
 
+  async revokeMemberSessions(orgId: string, userId: string, actorId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_orgId: { userId, orgId } },
+    });
+    if (!membership || membership.status !== MembershipStatus.ACTIVE) {
+      throw new NotFoundException('Member not found in this organization');
+    }
+
+    await this.prisma.refreshSession.deleteMany({ where: { userId } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenVersion: { increment: 1 } },
+    });
+
+    await this.audit.log({
+      userId: actorId,
+      orgId,
+      action: AuditAction.REVOKE,
+      entity: 'RefreshSession',
+      entityId: userId,
+      metadata: { email: userId },
+    });
+
+    return { message: 'All sessions revoked for this user' };
+  }
+
   async listJoinRequests(orgId: string) {
     const requests = await this.prisma.orgJoinRequest.findMany({
       where: { orgId, status: 'PENDING' },

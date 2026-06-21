@@ -38,9 +38,9 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url().default(PRODUCTION_FRONTEND_URL),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
-  JWT_EXPIRES_IN: z.string().default('1h'),
+  JWT_EXPIRES_IN: z.string().default('30d'),
   REFRESH_SECRET: z.string().min(16),
-  REFRESH_EXPIRES_IN: z.string().default('180d'),
+  REFRESH_EXPIRES_IN: z.string().default('365d'),
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z
     .string()

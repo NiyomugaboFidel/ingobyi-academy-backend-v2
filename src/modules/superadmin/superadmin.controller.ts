@@ -21,6 +21,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 import { buildPaginatedMeta } from '../../common/dto/pagination.dto';
 import { CreatePlatformUserDto } from './dto/create-platform-user.dto';
+import { UpdatePlatformUserDto } from './dto/update-platform-user.dto';
 
 @ApiTags('Superadmin')
 @Controller('superadmin')
@@ -128,9 +129,69 @@ export class SuperadminController {
         },
         update: { role: orgRole, status: 'ACTIVE' },
       });
+    } else {
+      const defaultOrg = await this.prisma.organization.findFirst({
+        where: { slug: 'ingobyi-innovation-hub', isActive: true },
+      });
+      if (defaultOrg) {
+        const orgRole = dto.orgRole ?? UserRole.STUDENT;
+        await this.prisma.membership.upsert({
+          where: { userId_orgId: { userId: user.id, orgId: defaultOrg.id } },
+          create: { userId: user.id, orgId: defaultOrg.id, role: orgRole },
+          update: { role: orgRole, status: 'ACTIVE' },
+        });
+      }
     }
 
     return user;
+  }
+
+  @Patch('users/:id')
+  @ApiOperation({ summary: 'Update platform user' })
+  async updateUser(
+    @Param('id', ParseCuidPipe) id: string,
+    @Body() dto: UpdatePlatformUserDto,
+  ) {
+    if (dto.platformRole === UserRole.SUPERADMIN) {
+      throw new BadRequestException('Cannot assign superadmin role');
+    }
+
+    const data: Record<string, unknown> = {};
+    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
+    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
+    if (dto.platformRole !== undefined) data.platformRole = dto.platformRole;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.isVerified !== undefined) data.isVerified = dto.isVerified;
+    if (dto.password) {
+      data.passwordHash = await bcrypt.hash(dto.password, 12);
+      data.refreshTokenVersion = { increment: 1 };
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        platformRole: true,
+        isVerified: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  @Post('users/:id/revoke-sessions')
+  @ApiOperation({ summary: 'Sign user out everywhere (revoke all sessions)' })
+  async revokeSessions(@Param('id', ParseCuidPipe) id: string) {
+    await this.prisma.refreshSession.deleteMany({ where: { userId: id } });
+    await this.prisma.user.update({
+      where: { id },
+      data: { refreshTokenVersion: { increment: 1 } },
+    });
+    return { message: 'All sessions revoked' };
   }
 
   @Patch('users/:id/activate')

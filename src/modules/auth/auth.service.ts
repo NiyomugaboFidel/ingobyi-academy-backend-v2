@@ -121,8 +121,17 @@ export class AuthService {
     if (!session || session.expiresAt < new Date() || !session.user.isActive) {
       throw new UnauthorizedException('Invalid refresh token');
     }
-    await this.prisma.refreshSession.delete({ where: { id: session.id } });
-    return this.issueTokens(session.userId, res);
+
+    const refreshMs = parseDurationToMs(
+      this.config.get('REFRESH_EXPIRES_IN', { infer: true }),
+      365,
+    );
+    await this.prisma.refreshSession.update({
+      where: { id: session.id },
+      data: { expiresAt: new Date(Date.now() + refreshMs) },
+    });
+
+    return this.issueAccessTokenForUser(session.userId, res);
   }
 
   async logout(
@@ -130,7 +139,13 @@ export class AuthService {
     res: Response,
     userId?: string,
   ) {
-    if (refreshToken) {
+    if (userId) {
+      await this.prisma.refreshSession.deleteMany({ where: { userId } });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { refreshTokenVersion: { increment: 1 } },
+      });
+    } else if (refreshToken) {
       const tokenHash = this.hashToken(refreshToken);
       await this.prisma.refreshSession.deleteMany({ where: { tokenHash } });
     }
@@ -273,6 +288,52 @@ export class AuthService {
     return this.issueTokens(user.id, res);
   }
 
+  private async issueAccessTokenForUser(
+    userId: string,
+    res: Response,
+    preferredOrgId?: string,
+  ) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: {
+        memberships: {
+          where: { status: 'ACTIVE', org: { isActive: true } },
+          include: {
+            org: {
+              select: { id: true, name: true, slug: true, logoUrl: true },
+            },
+          },
+        },
+      },
+    });
+
+    const workspace = resolveWorkspace(
+      user.platformRole,
+      user.memberships,
+      preferredOrgId,
+    );
+
+    const payload: JwtPayload = {
+      sub: userId,
+      role: workspace.platformRole,
+      orgId: workspace.orgId,
+      orgRole: workspace.orgRole,
+      rv: user.refreshTokenVersion,
+    };
+    const accessToken = this.jwt.sign(payload);
+    const sanitized = sanitizeUser(user);
+    return {
+      accessToken,
+      activeOrgId: workspace.orgId ?? null,
+      activeOrgRole: workspace.orgRole ?? null,
+      user: {
+        ...sanitized,
+        activeOrgId: workspace.orgId ?? null,
+        activeOrgRole: workspace.orgRole ?? null,
+      },
+    };
+  }
+
   private async issueTokens(
     userId: string,
     res: Response,
@@ -309,7 +370,7 @@ export class AuthService {
     const refreshToken = randomBytes(48).toString('base64url');
     const refreshMs = parseDurationToMs(
       this.config.get('REFRESH_EXPIRES_IN', { infer: true }),
-      180,
+      365,
     );
     const expiresAt = new Date(Date.now() + refreshMs);
 
@@ -391,7 +452,7 @@ export class AuthService {
   private setRefreshCookie(res: Response, token: string) {
     const refreshMs = parseDurationToMs(
       this.config.get('REFRESH_EXPIRES_IN', { infer: true }),
-      180,
+      365,
     );
     res.cookie(REFRESH_COOKIE, token, {
       ...this.cookieOptions(),

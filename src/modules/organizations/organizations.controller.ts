@@ -212,6 +212,18 @@ export class OrganizationsController {
     return this.orgsService.removeMember(id, userId);
   }
 
+  @Post(':id/members/:userId/revoke-sessions')
+  @UseGuards(OrgGuard)
+  @ApiOperation({ summary: 'Sign member out everywhere' })
+  async revokeMemberSessions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseCuidPipe) id: string,
+    @Param('userId', ParseCuidPipe) userId: string,
+  ) {
+    await this.orgsService.assertOrgAdmin(user, id);
+    return this.orgsService.revokeMemberSessions(id, userId, user.userId);
+  }
+
   @Get(':id/join-requests')
   @UseGuards(OrgGuard)
   @ApiOperation({ summary: 'List pending join requests' })

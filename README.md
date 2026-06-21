@@ -59,12 +59,23 @@ Run **Login (Superadmin)** first — it auto-saves the JWT token.
 
 After `npm run prisma:seed`, use password `password123` for all:
 
-| Role | Email |
-|------|-------|
-| Superadmin | `fidelniyomugabo67@gmail.com` |
-| Admin | `cyubahirorichard250@gmail.com` |
-| Student | `holly.worshiptv@gmail.com` |
-| Parent | `nfidele290@gmail.com` (linked to Holly) |
+| Role | Email | Notes |
+|------|-------|-------|
+| Superadmin | `fidelniyomugabo67@gmail.com` | Full platform access |
+| Admin | `cyubahirorichard250@gmail.com` | Ingobyi Innovation Hub admin |
+| Trainer | `manzitms209@gmail.com` | Ingobyi Innovation Hub trainer |
+| Student | `holly.worshiptv@gmail.com` | Enrolled in all 5 demo courses |
+| Parent | `nfidele290@gmail.com` | Linked to Holly |
+
+**UAT testers** (password `password123`, verified — no email OTP):
+
+| Email | Role |
+|-------|------|
+| `ngirinshutingirimana858@gmail.com` | Student |
+| `robertmunyaburanga8@gmail.com` | Student |
+| `kellymshema@gmail.com` | Student |
+| `manzitms209@gmail.com` | Trainer |
+| `niyobuhungirooscar40@gmail.com` | Student |
 
 ## Project Structure
 
@@ -139,7 +150,7 @@ Assigns orphan courses and users without memberships to the default `ingobyi-pla
    - **Request to join** an org with a role (`STUDENT`, `TRAINER`, `PARENT`) — `POST /api/organizations/join-requests`
    - **Create their own org** — `POST /api/organizations/bootstrap`
 4. Admins approve requests at `/admin/join-requests` (role shown on each request).
-5. Admins can also **add existing users directly** — `POST /api/organizations/:id/members` or email invite.
+5. Admins can also **add users directly** (verified, no OTP) — `POST /api/organizations/:id/members` with email, name, password, and role.
 
 Track pending requests: `GET /api/organizations/my-join-requests`
 
