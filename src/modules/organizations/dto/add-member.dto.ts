@@ -1,6 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class AddMemberDto {
   @ApiProperty()
@@ -27,4 +34,11 @@ export class AddMemberDto {
   @IsString()
   @MinLength(8)
   password?: string;
+
+  /** Required when role is PARENT — student user IDs in this organization. */
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  childIds?: string[];
 }

@@ -25,6 +25,15 @@ export class EnrollmentsService {
       throw new BadRequestException('Course not available for enrollment');
     }
 
+    const isCourseTrainer = await this.prisma.courseTrainer.findUnique({
+      where: { courseId_userId: { courseId, userId } },
+    });
+    if (isCourseTrainer) {
+      throw new BadRequestException(
+        'Course trainers cannot enroll as students in the same course',
+      );
+    }
+
     const existing = await this.prisma.enrollment.findUnique({
       where: { userId_courseId: { userId, courseId } },
       include: { course: { select: { id: true, title: true, slug: true } } },

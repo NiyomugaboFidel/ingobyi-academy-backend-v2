@@ -23,6 +23,9 @@ import {
 import { guardRole } from '../../common/utils/resolve-effective-role';
 import { uniqueSlug } from '../../common/utils/slug.util';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
+import {
+  learnerEnrollmentWhereForCourse,
+} from '../../common/utils/learner-enrollment';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ConversationsService } from '../messaging/conversations.service';
@@ -445,9 +448,12 @@ export class CoursesService {
   }
 
   async listStudents(courseId: string, pagination: PaginationDto) {
+    const where = learnerEnrollmentWhereForCourse(courseId, {
+      status: 'ACTIVE',
+    });
     const [data, total] = await Promise.all([
       this.prisma.enrollment.findMany({
-        where: { courseId, status: 'ACTIVE' },
+        where,
         skip: pagination.skip,
         take: pagination.limit,
         include: {
@@ -462,7 +468,7 @@ export class CoursesService {
           },
         },
       }),
-      this.prisma.enrollment.count({ where: { courseId, status: 'ACTIVE' } }),
+      this.prisma.enrollment.count({ where }),
     ]);
     return {
       data: data.map((e) => ({

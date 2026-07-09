@@ -17,9 +17,13 @@ import { ParseCuidPipe } from '../../common/pipes/parse-cuid.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { CoursesService } from '../courses/courses.service';
+import { OrganizationsService } from '../organizations/organizations.service';
+import { UpdateOrganizationDto } from '../organizations/dto/update-organization.dto';
+import { ParentService } from '../parent/parent.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 import { buildPaginatedMeta } from '../../common/dto/pagination.dto';
+import { CreatePlatformOrganizationDto } from './dto/create-platform-organization.dto';
 import { CreatePlatformUserDto } from './dto/create-platform-user.dto';
 import { UpdatePlatformUserDto } from './dto/update-platform-user.dto';
 
@@ -31,6 +35,8 @@ export class SuperadminController {
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
     private readonly courses: CoursesService,
+    private readonly parentLinks: ParentService,
+    private readonly organizations: OrganizationsService,
   ) {}
 
   @Get('orgs')
@@ -41,13 +47,41 @@ export class SuperadminController {
         skip: pagination.skip,
         take: pagination.limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          _count: { select: { memberships: true, courses: true } },
+        },
       }),
       this.prisma.organization.count(),
     ]);
     return {
-      data,
+      data: data.map(({ _count, ...org }) => ({
+        ...org,
+        memberCount: _count.memberships,
+        courseCount: _count.courses,
+      })),
       meta: buildPaginatedMeta(pagination.page, pagination.limit, total),
     };
+  }
+
+  @Post('orgs')
+  @ApiOperation({
+    summary: 'Create a new organization (SaaS tenant) on the platform',
+  })
+  createOrg(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreatePlatformOrganizationDto,
+  ) {
+    return this.organizations.createPlatformOrganization(user.userId, dto);
+  }
+
+  @Patch('orgs/:id')
+  @ApiOperation({ summary: 'Update any organization (all fields)' })
+  updateOrg(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseCuidPipe) id: string,
+    @Body() dto: UpdateOrganizationDto,
+  ) {
+    return this.organizations.update(id, dto, user);
   }
 
   @Get('users')
@@ -86,7 +120,15 @@ export class SuperadminController {
       throw new BadRequestException('Email already registered');
     }
 
-    const platformRole = dto.platformRole ?? UserRole.STUDENT;
+    const orgRole = dto.orgRole ?? UserRole.STUDENT;
+    if (orgRole === UserRole.PARENT && !dto.childIds?.length) {
+      throw new BadRequestException(
+        'Select at least one student to link to this parent',
+      );
+    }
+
+    const platformRole =
+      dto.platformRole ?? (orgRole === UserRole.PARENT ? UserRole.PARENT : UserRole.STUDENT);
     if (platformRole === UserRole.SUPERADMIN) {
       throw new BadRequestException('Cannot create superadmin via this endpoint');
     }
@@ -113,11 +155,13 @@ export class SuperadminController {
       },
     });
 
+    let membershipOrgId: string | undefined;
+
     if (dto.organizationId) {
-      const orgRole = dto.orgRole ?? UserRole.STUDENT;
       if (orgRole === UserRole.SUPERADMIN) {
         throw new BadRequestException('Cannot assign superadmin org role');
       }
+      membershipOrgId = dto.organizationId;
       await this.prisma.membership.upsert({
         where: {
           userId_orgId: { userId: user.id, orgId: dto.organizationId },
@@ -134,13 +178,26 @@ export class SuperadminController {
         where: { slug: 'ingobyi-innovation-hub', isActive: true },
       });
       if (defaultOrg) {
-        const orgRole = dto.orgRole ?? UserRole.STUDENT;
+        membershipOrgId = defaultOrg.id;
         await this.prisma.membership.upsert({
           where: { userId_orgId: { userId: user.id, orgId: defaultOrg.id } },
           create: { userId: user.id, orgId: defaultOrg.id, role: orgRole },
           update: { role: orgRole, status: 'ACTIVE' },
         });
       }
+    }
+
+    if (orgRole === UserRole.PARENT) {
+      if (!membershipOrgId) {
+        throw new BadRequestException(
+          'Parent accounts require an organization to link students',
+        );
+      }
+      await this.parentLinks.linkChildren(
+        user.id,
+        dto.childIds!,
+        membershipOrgId,
+      );
     }
 
     return user;

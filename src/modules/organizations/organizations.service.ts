@@ -24,6 +24,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../../shared/email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ParentService } from '../parent/parent.service';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateJoinRequestDto } from './dto/create-join-request.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -49,9 +50,15 @@ export class OrganizationsService {
     private readonly email: EmailService,
     private readonly rbac: RbacService,
     private readonly notifications: NotificationsService,
+    private readonly parentLinks: ParentService,
   ) {}
 
-  async create(userId: string, dto: CreateOrganizationDto) {
+  async create(
+    ownerUserId: string,
+    dto: CreateOrganizationDto,
+    options: { isVerified?: boolean } = {},
+  ) {
+    const isVerified = options.isVerified ?? true;
     const slug = await uniqueSlug(dto.name, async (s) => {
       const found = await this.prisma.organization.findUnique({
         where: { slug: s },
@@ -67,10 +74,12 @@ export class OrganizationsService {
         logoUrl: dto.logoUrl,
         country: dto.country,
         city: dto.city,
-        ownerId: userId,
+        website: dto.website,
+        isVerified,
+        ownerId: ownerUserId,
         memberships: {
           create: {
-            userId,
+            userId: ownerUserId,
             role: UserRole.ADMIN,
             status: MembershipStatus.ACTIVE,
           },
@@ -78,7 +87,36 @@ export class OrganizationsService {
       },
     });
     await this.rbac.seedOrgPermissions(org.id);
+    await this.audit.log({
+      userId: ownerUserId,
+      orgId: org.id,
+      action: AuditAction.CREATE,
+      entity: 'Organization',
+      entityId: org.id,
+      metadata: { name: org.name, slug: org.slug, isVerified },
+    });
     return org;
+  }
+
+  async createPlatformOrganization(
+    actorId: string,
+    dto: CreateOrganizationDto & { ownerEmail?: string; isVerified?: boolean },
+  ) {
+    let ownerUserId = actorId;
+    if (dto.ownerEmail) {
+      const owner = await this.prisma.user.findUnique({
+        where: { email: dto.ownerEmail.toLowerCase() },
+      });
+      if (!owner) {
+        throw new NotFoundException(
+          'No account with that owner email. The user must register first.',
+        );
+      }
+      ownerUserId = owner.id;
+    }
+
+    const { ownerEmail: _ownerEmail, isVerified, ...orgDto } = dto;
+    return this.create(ownerUserId, orgDto, { isVerified: isVerified ?? true });
   }
 
   async listMyMemberships(userId: string) {
@@ -208,6 +246,12 @@ export class OrganizationsService {
     };
   }
 
+  async getById(id: string) {
+    const org = await this.prisma.organization.findUnique({ where: { id } });
+    if (!org) throw new NotFoundException('Organization not found');
+    return org;
+  }
+
   async getBySlug(slug: string) {
     const org = await this.prisma.organization.findFirst({
       where: { slug, isActive: true },
@@ -216,8 +260,27 @@ export class OrganizationsService {
     return org;
   }
 
-  async update(id: string, dto: UpdateOrganizationDto) {
-    return this.prisma.organization.update({ where: { id }, data: dto });
+  async update(
+    id: string,
+    dto: UpdateOrganizationDto,
+    actor?: AuthenticatedUser,
+  ) {
+    const data: Prisma.OrganizationUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.logoUrl !== undefined) data.logoUrl = dto.logoUrl;
+    if (dto.coverUrl !== undefined) data.coverUrl = dto.coverUrl;
+    if (dto.website !== undefined) data.website = dto.website;
+    if (dto.type !== undefined) data.type = dto.type;
+    if (dto.country !== undefined) data.country = dto.country;
+    if (dto.city !== undefined) data.city = dto.city;
+
+    if (actor?.role === UserRole.SUPERADMIN) {
+      if (dto.isVerified !== undefined) data.isVerified = dto.isVerified;
+      if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    }
+
+    return this.prisma.organization.update({ where: { id }, data });
   }
 
   async getCertificateSettings(orgId: string) {
@@ -450,6 +513,11 @@ export class OrganizationsService {
     if (dto.role === UserRole.SUPERADMIN) {
       throw new BadRequestException('Cannot assign superadmin via organization');
     }
+    if (dto.role === UserRole.PARENT && !dto.childIds?.length) {
+      throw new BadRequestException(
+        'Select at least one student to link to this parent',
+      );
+    }
 
     let user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
@@ -513,6 +581,10 @@ export class OrganizationsService {
       metadata: { role: dto.role, email: dto.email },
     });
 
+    if (dto.role === UserRole.PARENT && dto.childIds?.length) {
+      await this.parentLinks.linkChildren(user.id, dto.childIds, orgId);
+    }
+
     return {
       ...membership,
       user: sanitizeUser(user as { passwordHash?: string }),
@@ -525,19 +597,69 @@ export class OrganizationsService {
     dto: UpdateMemberDto,
     actorId: string,
   ) {
+    if (
+      dto.role === undefined &&
+      dto.firstName === undefined &&
+      dto.lastName === undefined &&
+      !dto.password &&
+      dto.status === undefined
+    ) {
+      throw new BadRequestException('Nothing to update');
+    }
+
+    if (dto.role === UserRole.SUPERADMIN) {
+      throw new BadRequestException('Cannot assign superadmin via organization');
+    }
+
+    const userData: Prisma.UserUpdateInput = {};
+    if (dto.firstName !== undefined) userData.firstName = dto.firstName.trim();
+    if (dto.lastName !== undefined) userData.lastName = dto.lastName.trim();
+    if (dto.password) {
+      userData.passwordHash = await bcrypt.hash(dto.password, 12);
+      userData.refreshTokenVersion = { increment: 1 };
+    }
+
+    if (Object.keys(userData).length > 0) {
+      await this.prisma.user.update({ where: { id: userId }, data: userData });
+    }
+
+    const membershipData: Prisma.MembershipUpdateInput = {};
+    if (dto.role !== undefined) membershipData.role = dto.role;
+    if (dto.status !== undefined) membershipData.status = dto.status;
+
     const membership = await this.prisma.membership.update({
       where: { userId_orgId: { userId, orgId } },
-      data: { role: dto.role },
+      data: membershipData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+      },
     });
+
     await this.audit.log({
       userId: actorId,
       orgId,
-      action: AuditAction.GRANT,
+      action: AuditAction.UPDATE,
       entity: 'Membership',
       entityId: membership.id,
-      metadata: { role: dto.role },
+      metadata: {
+        role: dto.role,
+        status: dto.status,
+        userId,
+      },
     });
-    return membership;
+
+    return {
+      ...membership,
+      user: sanitizeUser(membership.user as { passwordHash?: string }),
+    };
   }
 
   async removeMember(orgId: string, userId: string) {

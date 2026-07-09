@@ -1,14 +1,62 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EnrollmentStatus } from '@prisma/client';
+import { EnrollmentStatus, MembershipStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class ParentService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async linkChildren(parentId: string, childIds: string[], orgId: string) {
+    if (!childIds?.length) {
+      throw new BadRequestException(
+        'Select at least one student to link to this parent',
+      );
+    }
+
+    const uniqueChildIds = [...new Set(childIds)];
+    if (uniqueChildIds.includes(parentId)) {
+      throw new BadRequestException('A parent cannot be linked to themselves');
+    }
+
+    const students = await this.prisma.user.findMany({
+      where: {
+        id: { in: uniqueChildIds },
+        isActive: true,
+        memberships: {
+          some: {
+            orgId,
+            role: UserRole.STUDENT,
+            status: MembershipStatus.ACTIVE,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (students.length !== uniqueChildIds.length) {
+      throw new BadRequestException(
+        'One or more selected students are invalid or not active students in this organization',
+      );
+    }
+
+    const approvedAt = new Date();
+    await this.prisma.$transaction(
+      uniqueChildIds.map((childId) =>
+        this.prisma.parentChildLink.upsert({
+          where: { parentId_childId: { parentId, childId } },
+          create: { parentId, childId, approvedAt },
+          update: { approvedAt },
+        }),
+      ),
+    );
+
+    return { linked: uniqueChildIds.length };
+  }
 
   private async assertChildAccess(parentId: string, childId: string) {
     const link = await this.prisma.parentChildLink.findUnique({

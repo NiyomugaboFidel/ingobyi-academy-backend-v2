@@ -99,6 +99,17 @@ export class OrganizationsController {
     return this.orgsService.list(user, pagination);
   }
 
+  @Get(':id')
+  @UseGuards(OrgGuard)
+  @ApiOperation({ summary: 'Get organization by id' })
+  async getById(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseCuidPipe) id: string,
+  ) {
+    await this.orgsService.assertOrgAdmin(user, id);
+    return this.orgsService.getById(id);
+  }
+
   @Patch(':id')
   @UseGuards(OrgGuard)
   @ApiOperation({ summary: 'Update organization' })
@@ -108,7 +119,7 @@ export class OrganizationsController {
     @Body() dto: UpdateOrganizationDto,
   ) {
     await this.orgsService.assertOrgAdmin(user, id);
-    return this.orgsService.update(id, dto);
+    return this.orgsService.update(id, dto, user);
   }
 
   @Get(':id/certificate-settings')

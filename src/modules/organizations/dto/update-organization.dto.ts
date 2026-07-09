@@ -1,11 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUrl } from 'class-validator';
+import { OrganizationType } from '@prisma/client';
+import { IsBoolean, IsEnum, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class UpdateOrganizationDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   name?: string;
+
+  @ApiPropertyOptional({ enum: OrganizationType })
+  @IsOptional()
+  @IsEnum(OrganizationType)
+  type?: OrganizationType;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -36,4 +42,16 @@ export class UpdateOrganizationDto {
   @IsOptional()
   @IsString()
   city?: string;
+
+  /** Superadmin only */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isVerified?: boolean;
+
+  /** Superadmin only */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

@@ -44,7 +44,11 @@ export class CommunityService {
     private readonly achievements: AchievementsService,
   ) {}
 
-  async feed(orgId: string | undefined, pagination: PaginationDto) {
+  async feed(
+    orgId: string | undefined,
+    pagination: PaginationDto,
+    viewerId?: string,
+  ) {
     const where = orgId ? { orgId } : {};
     const [data, total] = await Promise.all([
       this.prisma.communityPost.findMany({
@@ -70,10 +74,20 @@ export class CommunityService {
         ...data.flatMap((p) => p.comments.map((c) => c.authorId)),
       ]),
     ];
-    const statsMap = await this.loadStatsForUsers(authorIds);
+    const [statsMap, likedPostSet] = await Promise.all([
+      this.loadStatsForUsers(authorIds),
+      viewerId && data.length
+        ? this.loadLikedPostSet(
+            viewerId,
+            data.map((post) => post.id),
+          )
+        : Promise.resolve(new Set<string>()),
+    ]);
 
     return {
-      data: data.map((post) => this.mapPost(post, statsMap)),
+      data: data.map((post) =>
+        this.mapPost(post, statsMap, likedPostSet.has(post.id)),
+      ),
       meta: buildPaginatedMeta(pagination.page, pagination.limit, total),
     };
   }
@@ -99,13 +113,32 @@ export class CommunityService {
     return this.prisma.communityPost.delete({ where: { id: postId } });
   }
 
-  async toggleLike(postId: string) {
-    await this.prisma.communityPost.findUniqueOrThrow({
-      where: { id: postId },
-    });
-    return this.prisma.communityPost.update({
-      where: { id: postId },
-      data: { likesCount: { increment: 1 } },
+  async toggleLike(postId: string, userId: string) {
+    await this.prisma.communityPost.findUniqueOrThrow({ where: { id: postId } });
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.communityPostLike.findUnique({
+        where: { postId_userId: { postId, userId } },
+      });
+      if (existing) {
+        await tx.communityPostLike.delete({ where: { id: existing.id } });
+        await tx.communityPost.updateMany({
+          where: { id: postId, likesCount: { gt: 0 } },
+          data: { likesCount: { decrement: 1 } },
+        });
+        const post = await tx.communityPost.findUniqueOrThrow({
+          where: { id: postId },
+          select: { id: true, likesCount: true },
+        });
+        return { ...post, liked: false };
+      }
+
+      await tx.communityPostLike.create({ data: { postId, userId } });
+      const post = await tx.communityPost.update({
+        where: { id: postId },
+        data: { likesCount: { increment: 1 } },
+        select: { id: true, likesCount: true },
+      });
+      return { ...post, liked: true };
     });
   }
 
@@ -396,12 +429,14 @@ export class CommunityService {
       }>;
     },
     statsMap: Map<string, CommunityUserStats>,
+    likedByMe = false,
   ) {
     return {
       id: post.id,
       content: post.content,
       orgId: post.orgId,
       likesCount: post.likesCount,
+      likedByMe,
       isPinned: post.isPinned,
       createdAt: post.createdAt,
       author: this.mapPublicUser(
@@ -415,6 +450,18 @@ export class CommunityService {
         author: this.mapPublicUser(c.author, statsMap.get(c.author.id) ?? null),
       })),
     };
+  }
+
+  private async loadLikedPostSet(userId: string, postIds: string[]) {
+    if (!postIds.length) return new Set<string>();
+    const rows = await this.prisma.communityPostLike.findMany({
+      where: {
+        userId,
+        postId: { in: postIds },
+      },
+      select: { postId: true },
+    });
+    return new Set(rows.map((row) => row.postId));
   }
 
   async loadUserStats(userId: string): Promise<CommunityUserStats> {

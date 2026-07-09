@@ -1,5 +1,8 @@
-/** Parse env durations like `180d`, `1h`, `15m` into milliseconds. */
-export function parseDurationToMs(value: string, fallbackDays = 180): number {
+/** Max persistent cookie age browsers reliably accept (~400 days). */
+export const BROWSER_COOKIE_MAX_MS = 400 * 24 * 60 * 60 * 1000;
+
+/** Parse env durations like `365d`, `1h`, `15m` into milliseconds. */
+export function parseDurationToMs(value: string, fallbackDays = 3650): number {
   const trimmed = value.trim();
   const match = /^(\d+)([dhm])$/i.exec(trimmed);
   if (!match) return fallbackDays * 24 * 60 * 60 * 1000;
@@ -11,7 +14,7 @@ export function parseDurationToMs(value: string, fallbackDays = 180): number {
   return amount * 60 * 1000;
 }
 
-export function parseDurationToDays(value: string, fallbackDays = 180): number {
+export function parseDurationToDays(value: string, fallbackDays = 3650): number {
   return Math.ceil(
     parseDurationToMs(value, fallbackDays) / (24 * 60 * 60 * 1000),
   );

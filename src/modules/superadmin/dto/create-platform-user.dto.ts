@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -40,4 +41,11 @@ export class CreatePlatformUserDto {
   @IsOptional()
   @IsEnum(UserRole)
   orgRole?: UserRole;
+
+  /** Required when orgRole is PARENT — student user IDs in the target organization. */
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  childIds?: string[];
 }

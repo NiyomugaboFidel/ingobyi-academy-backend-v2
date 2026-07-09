@@ -32,8 +32,11 @@ export class CommunityController {
   @Get('feed')
   @Public()
   @ApiOperation({ summary: 'Global or org feed' })
-  feed(@Query() query: CommunityFeedQueryDto) {
-    return this.communityService.feed(query.orgId, query);
+  feed(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Query() query: CommunityFeedQueryDto,
+  ) {
+    return this.communityService.feed(query.orgId, query, user?.userId);
   }
 
   @Post('posts')
@@ -75,8 +78,11 @@ export class CommunityController {
 
   @Post('posts/:id/like')
   @ApiOperation({ summary: 'Like post' })
-  like(@Param('id', ParseCuidPipe) id: string) {
-    return this.communityService.toggleLike(id);
+  like(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseCuidPipe) id: string,
+  ) {
+    return this.communityService.toggleLike(id, user.userId);
   }
 
   @Post('posts/:id/comments')

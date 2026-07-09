@@ -1,11 +1,11 @@
 {
   "info": {
     "name": "Ingobyi Academy — Partner API",
-    "description": "External integration API for course catalog, enrollments, learner progress, certificates, and achievements.\n\nBase URL: https://ingobyi-academy-backend-v2-production.up.railway.app/api\nAuth: X-API-Key header (no JWT)\n\nAfter seeding (`npm run prisma:seed`), use the demo key in collection variable `partnerApiKey`.\n\nScopes:\n- COURSE_READ — courses, categories, curriculum\n- ENROLLMENT_READ — list/check enrollments\n- ENROLLMENT_WRITE — enroll learners\n- LEARNER_READ — progress, learning records, achievements\n- CERTIFICATE_VERIFY — verify certificate codes\n\nIndex: GET /api/partner\nSwagger: https://ingobyi-academy-backend-v2-production.up.railway.app/api/docs (Partner API tag)",
+    "description": "External integration API for course catalog, enrollments, learner progress, certificates, and achievements.\n\nBase URL: http://localhost:3001/api\nAuth: X-API-Key header (no JWT)\n\nAfter seeding (`npm run prisma:seed`), use the demo key in collection variable `partnerApiKey`.\n\nScopes:\n- COURSE_READ — courses, categories, curriculum\n- ENROLLMENT_READ — list/check enrollments\n- ENROLLMENT_WRITE — enroll learners\n- LEARNER_READ — progress, learning records, achievements\n- CERTIFICATE_VERIFY — verify certificate codes\n\nIndex: GET /api/partner\nSwagger: http://localhost:3001/api/docs (Partner API tag)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "https://ingobyi-academy-backend-v2-production.up.railway.app/api" },
+    { "key": "baseUrl", "value": "http://localhost:3001/api" },
     {
       "key": "partnerApiKey",
       "value": "ia_demo000000000000000000000000000000000000000000000000000000000000"

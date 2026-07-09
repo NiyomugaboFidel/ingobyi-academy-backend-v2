@@ -6,8 +6,7 @@ import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import {
-  PRODUCTION_API_URL,
-  PRODUCTION_FRONTEND_URL,
+  DEFAULT_API_URL,
 } from './common/constants/app-urls';
 import { EnvConfig } from './config/configuration';
 
@@ -18,7 +17,7 @@ async function bootstrap(): Promise<void> {
   const port = config.get('PORT', { infer: true });
   const frontendUrl = config.get('FRONTEND_URL', { infer: true });
   const nodeEnv = config.get('NODE_ENV', { infer: true });
-  const apiPublicUrl = PRODUCTION_API_URL;
+  const apiPublicUrl = DEFAULT_API_URL;
 
   app.setGlobalPrefix('api');
   if (nodeEnv === 'production' || nodeEnv === 'staging') {
@@ -62,7 +61,7 @@ async function bootstrap(): Promise<void> {
       )
       .setVersion('1.0.0')
       .setContact('Ingobyi Academy', frontendUrl, 'support@ingobyi.com')
-      .addServer(apiPublicUrl, 'Production (Railway)')
+      .addServer(apiPublicUrl, 'Local development')
       .addBearerAuth(
         {
           type: 'http',

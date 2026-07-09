@@ -30,4 +30,9 @@ export class CreateOrganizationDto {
   @IsOptional()
   @IsString()
   city?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUrl()
+  website?: string;
 }

@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { stringify } from 'csv-stringify/sync';
 import * as ExcelJS from 'exceljs';
+import {
+  excludeCourseTrainerPairs,
+  learnerEnrollmentWhereForCourse,
+} from '../../common/utils/learner-enrollment';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -66,6 +70,11 @@ export class AnalyticsService {
       };
     }
 
+    const trainerPairs = await this.prisma.courseTrainer.findMany({
+      where: { courseId: { in: courseIds } },
+      select: { courseId: true, userId: true },
+    });
+
     const [
       totalStudents,
       activeStudents,
@@ -75,21 +84,38 @@ export class AnalyticsService {
       ratingAgg,
       courseBreakdown,
     ] = await Promise.all([
-      this.prisma.enrollment.count({ where: { courseId: { in: courseIds } } }),
       this.prisma.enrollment.count({
-        where: { courseId: { in: courseIds }, status: 'ACTIVE' },
+        where: excludeCourseTrainerPairs(
+          { courseId: { in: courseIds } },
+          trainerPairs,
+        ),
       }),
       this.prisma.enrollment.count({
-        where: { courseId: { in: courseIds }, status: 'COMPLETED' },
+        where: excludeCourseTrainerPairs(
+          { courseId: { in: courseIds }, status: 'ACTIVE' },
+          trainerPairs,
+        ),
+      }),
+      this.prisma.enrollment.count({
+        where: excludeCourseTrainerPairs(
+          { courseId: { in: courseIds }, status: 'COMPLETED' },
+          trainerPairs,
+        ),
       }),
       this.prisma.lessonProgress.count({
         where: {
-          enrollment: { courseId: { in: courseIds } },
+          enrollment: excludeCourseTrainerPairs(
+            { courseId: { in: courseIds } },
+            trainerPairs,
+          ),
           isCompleted: true,
         },
       }),
       this.prisma.enrollment.findMany({
-        where: { courseId: { in: courseIds } },
+        where: excludeCourseTrainerPairs(
+          { courseId: { in: courseIds } },
+          trainerPairs,
+        ),
         orderBy: { enrolledAt: 'desc' },
         take: 8,
         include: {
@@ -141,13 +167,19 @@ export class AnalyticsService {
   }
 
   async courseStats(courseId: string) {
+    const where = learnerEnrollmentWhereForCourse(courseId);
     const [enrolled, completed, avgProgress] = await Promise.all([
-      this.prisma.enrollment.count({ where: { courseId } }),
+      this.prisma.enrollment.count({ where }),
       this.prisma.enrollment.count({
-        where: { courseId, status: 'COMPLETED' },
+        where: learnerEnrollmentWhereForCourse(courseId, {
+          status: 'COMPLETED',
+        }),
       }),
       this.prisma.lessonProgress.count({
-        where: { enrollment: { courseId }, isCompleted: true },
+        where: {
+          enrollment: learnerEnrollmentWhereForCourse(courseId),
+          isCompleted: true,
+        },
       }),
     ]);
     return { enrolled, completed, lessonsCompleted: avgProgress };

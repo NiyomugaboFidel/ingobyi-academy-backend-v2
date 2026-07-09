@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -9,7 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import { Response } from 'express';
 import { AuditAction, UserRole } from '@prisma/client';
-import { parseDurationToMs } from '../../common/utils/parse-duration';
+import { parseDurationToMs, BROWSER_COOKIE_MAX_MS } from '../../common/utils/parse-duration';
 import { EnvConfig } from '../../config/configuration';
 import { resolveWorkspace } from '../../common/utils/resolve-effective-role';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
@@ -27,6 +28,8 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -62,8 +65,8 @@ export class AuthService {
           },
         });
 
-    await this.sendOtp(user.email, user.id, 'VERIFY_EMAIL');
-    return { message: 'OTP sent to email', email: user.email };
+    const { code, emailSent } = await this.sendOtp(user.email, user.id, 'VERIFY_EMAIL');
+    return this.otpResponse(user.email, code, emailSent);
   }
 
   async verifyOtp(
@@ -97,8 +100,12 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
     if (!user.isVerified) {
-      await this.sendOtp(user.email, user.id, 'VERIFY_EMAIL');
-      throw new UnauthorizedException('Email not verified. OTP resent.');
+      const { emailSent } = await this.sendOtp(user.email, user.id, 'VERIFY_EMAIL');
+      throw new UnauthorizedException(
+        emailSent
+          ? 'Email not verified. A new code was sent to your inbox.'
+          : 'Email not verified. Check your inbox or use Resend code below.',
+      );
     }
     await this.audit.log({
       userId: user.id,
@@ -124,12 +131,14 @@ export class AuthService {
 
     const refreshMs = parseDurationToMs(
       this.config.get('REFRESH_EXPIRES_IN', { infer: true }),
-      365,
+      3650,
     );
     await this.prisma.refreshSession.update({
       where: { id: session.id },
       data: { expiresAt: new Date(Date.now() + refreshMs) },
     });
+
+    this.setRefreshCookie(res, refreshToken);
 
     return this.issueAccessTokenForUser(session.userId, res);
   }
@@ -171,8 +180,8 @@ export class AuthService {
     if (purpose === 'VERIFY_EMAIL' && user.isVerified) {
       throw new BadRequestException('Email already verified');
     }
-    await this.sendOtp(user.email, user.id, purpose);
-    return { message: 'OTP sent to email', email: user.email };
+    const { code, emailSent } = await this.sendOtp(user.email, user.id, purpose);
+    return this.otpResponse(user.email, code, emailSent);
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
@@ -370,7 +379,7 @@ export class AuthService {
     const refreshToken = randomBytes(48).toString('base64url');
     const refreshMs = parseDurationToMs(
       this.config.get('REFRESH_EXPIRES_IN', { infer: true }),
-      365,
+      3650,
     );
     const expiresAt = new Date(Date.now() + refreshMs);
 
@@ -396,7 +405,11 @@ export class AuthService {
     };
   }
 
-  private async sendOtp(email: string, userId: string | null, purpose: string) {
+  private async sendOtp(
+    email: string,
+    userId: string | null,
+    purpose: string,
+  ): Promise<{ code: string; emailSent: boolean }> {
     const recent = await this.prisma.otpChallenge.count({
       where: {
         email: email.toLowerCase(),
@@ -415,7 +428,37 @@ export class AuthService {
         expiresAt: new Date(Date.now() + OTP_TTL_MS),
       },
     });
-    await this.email.sendOtp(email, code, purpose as OtpPurpose);
+
+    let emailSent = false;
+    try {
+      await this.email.sendOtp(email, code, purpose as OtpPurpose);
+      emailSent = true;
+    } catch (err) {
+      this.logger.error(
+        `OTP email failed for ${email}: ${(err as Error).message}`,
+      );
+    }
+
+    return { code, emailSent };
+  }
+
+  private otpResponse(email: string, code: string, emailSent: boolean) {
+    const response: {
+      message: string;
+      email: string;
+      emailSent: boolean;
+      devOtp?: string;
+    } = {
+      message: emailSent
+        ? 'Verification code sent to your email'
+        : 'Account created — use the code below or tap Resend code',
+      email,
+      emailSent,
+    };
+    if (this.config.get('NODE_ENV', { infer: true }) === 'development') {
+      response.devOtp = code;
+    }
+    return response;
   }
 
   private async validateOtp(email: string, code: string, purpose: string) {
@@ -452,11 +495,11 @@ export class AuthService {
   private setRefreshCookie(res: Response, token: string) {
     const refreshMs = parseDurationToMs(
       this.config.get('REFRESH_EXPIRES_IN', { infer: true }),
-      365,
+      3650,
     );
     res.cookie(REFRESH_COOKIE, token, {
       ...this.cookieOptions(),
-      maxAge: refreshMs,
+      maxAge: Math.min(refreshMs, BROWSER_COOKIE_MAX_MS),
     });
   }
 

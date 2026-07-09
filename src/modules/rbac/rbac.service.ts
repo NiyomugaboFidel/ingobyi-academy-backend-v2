@@ -20,7 +20,7 @@ export class RbacService implements OnModuleInit {
           : '';
       if (code === 'P2021') {
         throw new Error(
-          'Database schema is missing. Run migrations first: npm run prisma:migrate:deploy (or deploy with start:railway on Railway).',
+          'Database schema is missing. Run migrations first: npm run prisma:migrate',
         );
       }
       throw err;

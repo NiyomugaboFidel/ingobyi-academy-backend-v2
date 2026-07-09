@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
-  PRODUCTION_FRONTEND_URL,
-  PRODUCTION_GOOGLE_CALLBACK_URL,
+  DEFAULT_FRONTEND_URL,
+  DEFAULT_GOOGLE_CALLBACK_URL,
 } from '../common/constants/app-urls';
 
 /** Normalize legacy/alternate env names before Zod validation. */
@@ -12,6 +12,29 @@ export function normalizeEnv(
 
   if (!env.EMAIL_FROM && env.SMTP_FROM) {
     env.EMAIL_FROM = `Ingobyi Academy <${env.SMTP_FROM}>`;
+  }
+
+  for (const key of [
+    'RESEND_API_KEY',
+    'GOOGLE_CLIENT_ID',
+    'GOOGLE_CLIENT_SECRET',
+    'COOKIE_DOMAIN',
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET',
+    'CLOUDINARY_URL',
+    'SMTP_HOST',
+    'SMTP_USER',
+    'SMTP_PASS',
+    'SMTP_FROM',
+  ]) {
+    if (env[key] === '') {
+      delete env[key];
+    }
+  }
+
+  if (typeof env.SMTP_PASS === 'string') {
+    env.SMTP_PASS = env.SMTP_PASS.replace(/\s+/g, '');
   }
 
   const cloudinaryUrl = env.CLOUDINARY_URL;
@@ -35,12 +58,12 @@ const envSchema = z.object({
     .enum(['development', 'production', 'test', 'staging'])
     .default('development'),
   PORT: z.coerce.number().default(3001),
-  FRONTEND_URL: z.string().url().default(PRODUCTION_FRONTEND_URL),
+  FRONTEND_URL: z.string().url().default(DEFAULT_FRONTEND_URL),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
-  JWT_EXPIRES_IN: z.string().default('30d'),
+  JWT_EXPIRES_IN: z.string().default('365d'),
   REFRESH_SECRET: z.string().min(16),
-  REFRESH_EXPIRES_IN: z.string().default('365d'),
+  REFRESH_EXPIRES_IN: z.string().default('3650d'),
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z
     .string()
@@ -56,13 +79,19 @@ const envSchema = z.object({
     .default('false'),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_CALLBACK_URL: z.string().url().default(PRODUCTION_GOOGLE_CALLBACK_URL),
+  GOOGLE_CALLBACK_URL: z.string().url().default(DEFAULT_GOOGLE_CALLBACK_URL),
   /** Resend — https://resend.com */
   RESEND_API_KEY: z.string().min(1).optional(),
   /** e.g. Ingobyi Academy <onboarding@resend.dev> or your verified domain */
   EMAIL_FROM: z
     .string()
     .default('Ingobyi Academy <onboarding@resend.dev>'),
+  /** SMTP fallback when RESEND_API_KEY is not set (e.g. Gmail) */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),

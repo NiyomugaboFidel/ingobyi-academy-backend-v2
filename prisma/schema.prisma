@@ -202,6 +202,7 @@ model User {
   achievements         StudentAchievement[]
   posts                CommunityPost[]
   comments             CommunityComment[]
+  postLikes            CommunityPostLike[]
   following            UserFollow[]         @relation("Follower")
   followers            UserFollow[]         @relation("Following")
   parentLinks          ParentChildLink[]    @relation("ParentLink")
@@ -821,10 +822,25 @@ model CommunityPost {
 
   author   User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
   comments CommunityComment[]
+  likes    CommunityPostLike[]
 
   @@index([authorId])
   @@index([orgId])
   @@index([createdAt])
+}
+
+model CommunityPostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
 }
 
 model CommunityComment {

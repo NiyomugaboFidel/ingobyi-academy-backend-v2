@@ -1,13 +1,13 @@
 #!/bin/sh
 set -e
 
-echo "==> Ingobyi API — Railway startup"
+echo "==> Ingobyi API — production startup"
 echo "    NODE_ENV=${NODE_ENV:-development}"
 echo "    PORT=${PORT:-3001}"
 
 if [ -z "$DATABASE_URL" ]; then
   echo "ERROR: DATABASE_URL is not set."
-  echo "In Railway: Variables → DATABASE_URL = \${{Postgres.DATABASE_URL}}"
+  echo "Set DATABASE_URL in your .env file (local PostgreSQL connection string)."
   exit 1
 fi
 
@@ -15,8 +15,8 @@ echo "==> Running database migrations..."
 if ! npx prisma migrate deploy; then
   echo ""
   echo "ERROR: Database migrations failed."
-  echo "Check DATABASE_URL is linked to your Postgres plugin."
-  echo "For local runs against Railway: npm run prisma:migrate:deploy"
+  echo "Check DATABASE_URL and ensure PostgreSQL is running."
+  echo "For local dev: npm run prisma:migrate"
   exit 1
 fi
 

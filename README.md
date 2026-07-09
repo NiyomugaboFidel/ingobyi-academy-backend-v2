@@ -30,11 +30,11 @@ npm run prisma:migrate
 npm run start:dev
 ```
 
-API: `https://ingobyi-academy-backend-v2-production.up.railway.app/api`  
-Swagger: `https://ingobyi-academy-backend-v2-production.up.railway.app/api/docs`  
-Route index: `https://ingobyi-academy-backend-v2-production.up.railway.app/api/routes`  
-Health: `https://ingobyi-academy-backend-v2-production.up.railway.app/api/health`  
-Frontend: `https://ingobyi-academy-frontend-v2.vercel.app`
+API: `http://localhost:3001/api`  
+Swagger: `http://localhost:3001/api/docs`  
+Route index: `http://localhost:3001/api/routes`  
+Health: `http://localhost:3001/api/health`  
+Frontend: `http://localhost:3000`
 
 ## Testing
 
