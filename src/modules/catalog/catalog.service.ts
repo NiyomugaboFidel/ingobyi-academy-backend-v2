@@ -16,6 +16,7 @@ import {
   resolveLanguages,
   resolveLevels,
 } from './catalog-search.helpers';
+import { ageBandToNumericRange } from '../../common/constants/student-profile';
 import { CreateCourseReviewDto } from './dto/create-review.dto';
 
 type CatalogSearchFilters = {
@@ -31,6 +32,7 @@ type CatalogSearchFilters = {
   language?: string;
   ratingMin?: number;
   duration?: string;
+  ageBand?: string;
 };
 
 @Injectable()
@@ -110,6 +112,17 @@ export class CatalogService {
         : languageCodes.length > 1
           ? { language: { in: languageCodes } }
           : {}),
+      ...(filters.ageBand
+        ? (() => {
+            const { min, max } = ageBandToNumericRange(filters.ageBand);
+            return {
+              AND: [
+                { OR: [{ minAge: null }, { minAge: { lte: max } }] },
+                { OR: [{ maxAge: null }, { maxAge: { gte: min } }] },
+              ],
+            };
+          })()
+        : {}),
     };
 
     const orderBy = this.resolveOrderBy(filters.sort, Boolean(filters.q));

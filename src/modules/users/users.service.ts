@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  requiresCombination,
+} from '../../common/constants/student-profile';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveWorkspace } from '../../common/utils/resolve-effective-role';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
 import { AchievementsService } from '../achievements/achievements.service';
 import { UpdateAvatarDto } from './dto/update-avatar.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CompleteProfileDto } from './dto/complete-profile.dto';
 
 @Injectable()
 export class UsersService {
@@ -57,6 +61,39 @@ export class UsersService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: dto,
+    });
+    return sanitizeUser(user);
+  }
+
+  async completeProfile(userId: string, dto: CompleteProfileDto) {
+    const membership = await this.prisma.membership.findFirst({
+      where: { userId, role: 'STUDENT', status: 'ACTIVE' },
+    });
+    if (!membership) {
+      throw new NotFoundException(
+        'Only approved students can complete a learning profile',
+      );
+    }
+
+    const needsCombination = requiresCombination(dto.classLevel);
+    if (needsCombination && !dto.combination) {
+      throw new BadRequestException(
+        'A-Level students (S4–S6) must select a subject combination',
+      );
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ageBand: dto.ageBand,
+        gender: dto.gender,
+        classLevel: dto.classLevel,
+        combination: needsCombination ? (dto.combination ?? null) : null,
+        schoolName: dto.schoolName.trim(),
+        homeAddress: dto.homeAddress.trim(),
+        interestedSkills: dto.interestedSkills,
+        profileCompletedAt: new Date(),
+      },
     });
     return sanitizeUser(user);
   }

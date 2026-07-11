@@ -406,6 +406,7 @@ export class OrganizationsService {
     return this.requestJoin(dto.organizationId, userId, {
       message: dto.message,
       requestedRole: dto.requestedRole,
+      childIds: dto.childIds,
     });
   }
 
@@ -425,6 +426,43 @@ export class OrganizationsService {
         },
       },
     });
+  }
+
+  async listOrgStudentsForParent(orgId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { id: true, isActive: true },
+    });
+    if (!org?.isActive) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const members = await this.prisma.membership.findMany({
+      where: {
+        orgId,
+        role: UserRole.STUDENT,
+        status: MembershipStatus.ACTIVE,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: { joinedAt: 'desc' },
+    });
+
+    return members.map((m) => ({
+      id: m.user.id,
+      firstName: m.user.firstName,
+      lastName: m.user.lastName,
+      fullName: `${m.user.firstName} ${m.user.lastName}`,
+      avatarUrl: m.user.avatarUrl,
+    }));
   }
 
   async requestJoin(orgId: string, userId: string, dto: JoinRequestDto) {
@@ -459,6 +497,15 @@ export class OrganizationsService {
       throw new BadRequestException('Cannot request admin or superadmin role');
     }
 
+    if (requestedRole === UserRole.PARENT) {
+      if (!dto.childIds?.length) {
+        throw new BadRequestException(
+          'Parents must select at least one student in the organization',
+        );
+      }
+      await this.parentLinks.validateChildrenInOrg(dto.childIds, orgId);
+    }
+
     const [request, user, admins] = await Promise.all([
       this.prisma.orgJoinRequest.create({
         data: {
@@ -466,6 +513,7 @@ export class OrganizationsService {
           userId,
           message: dto.message,
           requestedRole,
+          childIds: dto.childIds ?? [],
         },
       }),
       this.prisma.user.findUnique({ where: { id: userId } }),
@@ -747,9 +795,11 @@ export class OrganizationsService {
       },
     });
 
+    const approvedRole =
+      dto.approvedRole ?? request.requestedRole ?? UserRole.STUDENT;
+
     if (dto.status === 'APPROVED') {
-      const role =
-        dto.approvedRole ?? request.requestedRole ?? UserRole.STUDENT;
+      const role = approvedRole;
       await this.prisma.$transaction([
         this.prisma.membership.upsert({
           where: { userId_orgId: { userId: request.userId, orgId } },
@@ -761,6 +811,24 @@ export class OrganizationsService {
           data: { isVerified: true },
         }),
       ]);
+
+      if (role === UserRole.PARENT && request.childIds.length > 0) {
+        await this.parentLinks.linkChildren(
+          request.userId,
+          request.childIds,
+          orgId,
+        );
+      }
+
+      if (role === UserRole.STUDENT) {
+        await this.prisma.refreshSession.deleteMany({
+          where: { userId: request.userId },
+        });
+        await this.prisma.user.update({
+          where: { id: request.userId },
+          data: { refreshTokenVersion: { increment: 1 } },
+        });
+      }
     }
 
     if (requester) {
@@ -776,9 +844,13 @@ export class OrganizationsService {
           ? `Welcome to ${org?.name ?? 'organization'}`
           : `Join request update — ${org?.name ?? 'organization'}`,
         dto.status === 'APPROVED'
-          ? 'Your membership request was approved. Switch workspace from your dashboard.'
+          ? 'Your membership request was approved. Sign in again to continue.'
           : 'Your membership request was declined.',
-        dto.status === 'APPROVED' ? '/onboarding' : '/onboarding',
+        dto.status === 'APPROVED'
+          ? approvedRole === UserRole.STUDENT
+            ? '/login?approved=student'
+            : '/login?approved=1'
+          : '/onboarding',
       );
     }
     return { message: `Request ${dto.status.toLowerCase()}` };

@@ -90,6 +90,12 @@ export class OrganizationsController {
     return this.orgsService.listMyJoinRequests(user.userId);
   }
 
+  @Get(':id/students-for-parent')
+  @ApiOperation({ summary: 'List students in an organization for parent onboarding' })
+  listStudentsForParent(@Param('id', ParseCuidPipe) id: string) {
+    return this.orgsService.listOrgStudentsForParent(id);
+  }
+
   @Get()
   @ApiOperation({ summary: 'List organizations' })
   list(

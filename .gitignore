@@ -37,3 +37,5 @@ storage/
 
 # Misc
 .cursor/
+.cursorrules
+.cursorignore

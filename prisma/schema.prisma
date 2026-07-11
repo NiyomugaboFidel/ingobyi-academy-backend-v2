@@ -179,6 +179,14 @@ model User {
   phone         String?
   country       String?
   preferredLang String    @default("en")
+  ageBand            String?
+  gender             String?
+  interestedSkills   String[]  @default([])
+  classLevel         String?
+  combination        String?
+  schoolName         String?
+  homeAddress        String?
+  profileCompletedAt DateTime?
   platformRole         UserRole  @default(STUDENT)
   refreshTokenVersion  Int       @default(0)
   isVerified           Boolean   @default(false)
@@ -373,6 +381,7 @@ model OrgJoinRequest {
   orgId         String
   userId        String
   requestedRole UserRole  @default(STUDENT)
+  childIds      String[]  @default([])
   message       String?
   status        String    @default("PENDING")
   reviewedBy    String?
@@ -445,6 +454,8 @@ model Course {
   status              CourseStatus        @default(DRAFT)
   type                CourseType          @default(SELF_PACED)
   tags                String[]
+  minAge              Int?
+  maxAge              Int?
   categoryId          String?
   requiresPhysical    Boolean             @default(false)
   certificateDelivery CertificateDelivery @default(DIGITAL)

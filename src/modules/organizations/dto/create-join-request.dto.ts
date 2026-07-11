@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { ArrayMinSize, IsArray, IsEnum, IsOptional, IsString, ValidateIf } from 'class-validator';
 
 export class CreateJoinRequestDto {
   @ApiProperty({ description: 'Organization to request joining' })
@@ -16,4 +16,15 @@ export class CreateJoinRequestDto {
   @IsOptional()
   @IsString()
   message?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Student user IDs to link when requesting PARENT role',
+  })
+  @ValidateIf((o) => o.requestedRole === UserRole.PARENT)
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  @IsOptional()
+  childIds?: string[];
 }

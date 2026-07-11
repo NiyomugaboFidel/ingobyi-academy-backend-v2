@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -6,6 +6,7 @@ import { AuthenticatedUser } from '../../common/interfaces/request-with-user.int
 import { ParseCuidPipe } from '../../common/pipes/parse-cuid.pipe';
 import { UpdateAvatarDto } from './dto/update-avatar.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('Users')
@@ -26,6 +27,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Update profile' })
   updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateUserDto) {
     return this.usersService.updateMe(user.userId, dto);
+  }
+
+  @Post('me/complete-profile')
+  @ApiOperation({ summary: 'Complete student learning profile after approval' })
+  completeProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CompleteProfileDto,
+  ) {
+    return this.usersService.completeProfile(user.userId, dto);
   }
 
   @Delete('me')

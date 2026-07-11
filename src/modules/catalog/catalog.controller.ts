@@ -65,6 +65,10 @@ class CatalogSearchQueryDto extends PaginationDto {
   @Min(0)
   @Max(5)
   ratingMin?: number;
+
+  @IsOptional()
+  @IsString()
+  ageBand?: string;
 }
 
 @ApiTags('Catalog')
@@ -90,6 +94,7 @@ export class CatalogController {
       language,
       duration,
       ratingMin,
+      ageBand,
     } = query;
     return this.catalogService.search(query, {
       q,
@@ -104,6 +109,7 @@ export class CatalogController {
       language,
       duration,
       ratingMin,
+      ageBand,
     });
   }
 

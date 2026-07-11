@@ -12,6 +12,26 @@ export class ParentService {
   constructor(private readonly prisma: PrismaService) {}
 
   async linkChildren(parentId: string, childIds: string[], orgId: string) {
+    const uniqueChildIds = await this.validateChildrenInOrg(childIds, orgId);
+    if (uniqueChildIds.includes(parentId)) {
+      throw new BadRequestException('A parent cannot be linked to themselves');
+    }
+
+    const approvedAt = new Date();
+    await this.prisma.$transaction(
+      uniqueChildIds.map((childId) =>
+        this.prisma.parentChildLink.upsert({
+          where: { parentId_childId: { parentId, childId } },
+          create: { parentId, childId, approvedAt },
+          update: { approvedAt },
+        }),
+      ),
+    );
+
+    return { linked: uniqueChildIds.length };
+  }
+
+  async validateChildrenInOrg(childIds: string[], orgId: string) {
     if (!childIds?.length) {
       throw new BadRequestException(
         'Select at least one student to link to this parent',
@@ -19,10 +39,6 @@ export class ParentService {
     }
 
     const uniqueChildIds = [...new Set(childIds)];
-    if (uniqueChildIds.includes(parentId)) {
-      throw new BadRequestException('A parent cannot be linked to themselves');
-    }
-
     const students = await this.prisma.user.findMany({
       where: {
         id: { in: uniqueChildIds },
@@ -44,18 +60,7 @@ export class ParentService {
       );
     }
 
-    const approvedAt = new Date();
-    await this.prisma.$transaction(
-      uniqueChildIds.map((childId) =>
-        this.prisma.parentChildLink.upsert({
-          where: { parentId_childId: { parentId, childId } },
-          create: { parentId, childId, approvedAt },
-          update: { approvedAt },
-        }),
-      ),
-    );
-
-    return { linked: uniqueChildIds.length };
+    return uniqueChildIds;
   }
 
   private async assertChildAccess(parentId: string, childId: string) {
