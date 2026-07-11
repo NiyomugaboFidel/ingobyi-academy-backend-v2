@@ -13,9 +13,3 @@ export function parseDurationToMs(value: string, fallbackDays = 3650): number {
   if (unit === 'h') return amount * 60 * 60 * 1000;
   return amount * 60 * 1000;
 }
-
-export function parseDurationToDays(value: string, fallbackDays = 3650): number {
-  return Math.ceil(
-    parseDurationToMs(value, fallbackDays) / (24 * 60 * 60 * 1000),
-  );
-}
