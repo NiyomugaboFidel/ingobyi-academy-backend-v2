@@ -24,8 +24,6 @@ export type AgeBand = (typeof AGE_BANDS)[number];
 export const GENDERS = [
   'FEMALE',
   'MALE',
-  'NON_BINARY',
-  'PREFER_NOT_TO_SAY',
 ] as const;
 
 export type Gender = (typeof GENDERS)[number];

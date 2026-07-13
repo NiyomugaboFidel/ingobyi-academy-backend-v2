@@ -65,6 +65,15 @@ export class CoursesController {
     return this.coursesService.getPreviewBySlug(slug, user);
   }
 
+  @Get('mine/students')
+  @Roles(UserRole.TRAINER, UserRole.SUPERADMIN)
+  @ApiOperation({
+    summary: 'List all students enrolled in courses taught by the current trainer',
+  })
+  listMyStudents(@CurrentUser() user: AuthenticatedUser) {
+    return this.coursesService.listTrainerStudents(user.userId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get course by ID' })
   getById(

@@ -93,6 +93,13 @@ export class AuthService {
   async login(dto: LoginDto, res: Response, ip?: string, ua?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        isActive: true,
+        isVerified: true,
+      },
     });
     if (!user?.passwordHash || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
@@ -107,14 +114,17 @@ export class AuthService {
           : 'Email not verified. Check your inbox or use Resend code below.',
       );
     }
-    await this.audit.log({
-      userId: user.id,
-      action: AuditAction.LOGIN,
-      entity: 'User',
-      entityId: user.id,
-      ipAddress: ip,
-      userAgent: ua,
-    });
+    // Don't block the login response on audit write
+    void this.audit
+      .log({
+        userId: user.id,
+        action: AuditAction.LOGIN,
+        entity: 'User',
+        entityId: user.id,
+        ipAddress: ip,
+        userAgent: ua,
+      })
+      .catch(() => undefined);
     return this.issueTokens(user.id, res);
   }
 
@@ -213,6 +223,29 @@ export class AuthService {
   }
 
   async switchOrg(userId: string, orgId: string, res: Response) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { platformRole: true, isActive: true },
+    });
+    if (!actor?.isActive) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Platform superadmins inspect any org without needing membership
+    if (actor.platformRole === UserRole.SUPERADMIN) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { id: true, isActive: true },
+      });
+      if (!org) {
+        throw new UnauthorizedException('Organization not found');
+      }
+      if (!org.isActive) {
+        throw new UnauthorizedException('Organization is suspended');
+      }
+      return this.issueTokens(userId, res, orgId);
+    }
+
     const membership = await this.prisma.membership.findUnique({
       where: { userId_orgId: { userId, orgId } },
       include: { org: { select: { isActive: true } } },

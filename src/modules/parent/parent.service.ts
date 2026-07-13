@@ -136,6 +136,51 @@ export class ParentService {
           },
         });
 
+        const courseIds = enrollments.map((e) => e.course.id);
+
+        const [sessionCounts, attendanceRows, certificates] = await Promise.all([
+          courseIds.length
+            ? this.prisma.physicalSession.groupBy({
+                by: ['courseId'],
+                where: { courseId: { in: courseIds } },
+                _count: { _all: true },
+              })
+            : Promise.resolve([]),
+          courseIds.length
+            ? this.prisma.physicalAttendance.findMany({
+                where: {
+                  userId: child.id,
+                  session: { courseId: { in: courseIds } },
+                },
+                select: {
+                  status: true,
+                  session: { select: { courseId: true } },
+                },
+              })
+            : Promise.resolve([]),
+          this.prisma.certificate.findMany({
+            where: { userId: child.id, revokedAt: null },
+            select: {
+              id: true,
+              issuedAt: true,
+              verifyCode: true,
+              pdfUrl: true,
+              course: { select: { id: true, title: true, slug: true } },
+            },
+            orderBy: { issuedAt: 'desc' },
+          }),
+        ]);
+
+        const sessionsByCourse = new Map(
+          sessionCounts.map((row) => [row.courseId, row._count._all]),
+        );
+        const presentByCourse = new Map<string, number>();
+        for (const row of attendanceRows) {
+          if (row.status !== 'PRESENT' && row.status !== 'LATE') continue;
+          const cid = row.session.courseId;
+          presentByCourse.set(cid, (presentByCourse.get(cid) ?? 0) + 1);
+        }
+
         const courses = enrollments.map((enrollment) => {
           const totalLessons = enrollment.course.modules.reduce(
             (sum, module) => sum + module.lessons.length,
@@ -147,6 +192,12 @@ export class ParentService {
               ? Math.round((completedLessons / totalLessons) * 100)
               : 0;
           const primaryTrainer = enrollment.course.trainers[0]?.user;
+          const totalSessions = sessionsByCourse.get(enrollment.course.id) ?? 0;
+          const attendedSessions = presentByCourse.get(enrollment.course.id) ?? 0;
+          const attendancePercent =
+            totalSessions > 0
+              ? Math.round((attendedSessions / totalSessions) * 100)
+              : null;
 
           return {
             enrollmentId: enrollment.id,
@@ -158,6 +209,9 @@ export class ParentService {
             progressPercent,
             completedLessons,
             totalLessons,
+            totalSessions,
+            attendedSessions,
+            attendancePercent,
             enrolledAt: enrollment.enrolledAt,
             lastActivityAt:
               enrollment.progress[0]?.completedAt ?? enrollment.enrolledAt,
@@ -177,6 +231,18 @@ export class ParentService {
             )
           : 0;
 
+        const coursesWithAttendance = courses.filter(
+          (c) => c.attendancePercent != null,
+        );
+        const avgAttendance = coursesWithAttendance.length
+          ? Math.round(
+              coursesWithAttendance.reduce(
+                (sum, c) => sum + (c.attendancePercent ?? 0),
+                0,
+              ) / coursesWithAttendance.length,
+            )
+          : null;
+
         const achievements = await this.prisma.studentAchievement.count({
           where: { userId: child.id },
         });
@@ -193,7 +259,16 @@ export class ParentService {
           organization: org,
           courseCount: courses.length,
           avgProgress,
+          avgAttendance,
           achievements,
+          certificateCount: certificates.length,
+          certificates: certificates.map((cert) => ({
+            id: cert.id,
+            issuedAt: cert.issuedAt,
+            verifyCode: cert.verifyCode,
+            pdfUrl: cert.pdfUrl,
+            course: cert.course,
+          })),
           lastActiveAt: courses.reduce<Date | null>((latest, course) => {
             const at = new Date(course.lastActivityAt);
             return !latest || at > latest ? at : latest;
@@ -216,7 +291,7 @@ export class ParentService {
       where: { userId: childId },
       include: { definition: true },
       orderBy: { createdAt: 'desc' },
-      take: 10,
+      take: 20,
     });
 
     const upcomingAssignments = await this.prisma.assignment.findMany({
@@ -248,6 +323,17 @@ export class ParentService {
       take: 5,
     });
 
-    return { ...child, achievements, upcomingAssignments };
+    return {
+      ...child,
+      achievementList: achievements.map((a) => ({
+        id: a.id,
+        earnedAt: a.createdAt,
+        definition: {
+          name: a.definition.title,
+          description: a.definition.description,
+        },
+      })),
+      upcomingAssignments,
+    };
   }
 }

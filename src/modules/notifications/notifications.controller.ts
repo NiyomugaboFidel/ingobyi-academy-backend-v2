@@ -24,6 +24,12 @@ export class NotificationsController {
     );
   }
 
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Unread account notification count (excludes messages)' })
+  unreadCount(@CurrentUser() user: AuthenticatedUser) {
+    return this.notificationsService.unreadAccountCount(user.userId);
+  }
+
   @Patch(':id/read')
   @ApiOperation({ summary: 'Mark notification as read' })
   markRead(

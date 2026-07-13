@@ -5,7 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import { ConversationType, NotificationType } from '@prisma/client';
+import { ConversationType, NotificationType, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -205,19 +205,74 @@ export class MessagesService implements OnModuleInit {
         where: { conversationId_userId: { conversationId, userId: p.userId } },
         data: { unreadCount: { increment: 1 } },
       });
+    }
 
-      if (!data.isAnnouncement) {
+    if (!data.isAnnouncement && otherParticipants.length) {
+      const recipients = await this.prisma.user.findMany({
+        where: { id: { in: otherParticipants.map((p) => p.userId) } },
+        select: {
+          id: true,
+          platformRole: true,
+          memberships: {
+            where: { status: 'ACTIVE' },
+            select: { role: true },
+            take: 8,
+          },
+        },
+      });
+      const byId = new Map(recipients.map((r) => [r.id, r]));
+
+      for (const p of otherParticipants) {
+        const recipient = byId.get(p.userId);
+        const link = this.messagesInboxLink(
+          conversationId,
+          recipient?.platformRole,
+          recipient?.memberships?.map((m) => m.role) ?? [],
+        );
         await this.notifications.create(
           p.userId,
           NotificationType.MESSAGE_RECEIVED,
           `New message from ${message.sender.firstName}`,
           plainText.slice(0, 120),
-          `/messages?conversation=${conversationId}`,
+          link,
         );
       }
     }
 
     return message;
+  }
+
+  private messagesInboxLink(
+    conversationId: string,
+    platformRole?: UserRole,
+    membershipRoles: UserRole[] = [],
+  ) {
+    const priority = [
+      UserRole.ADMIN,
+      UserRole.TRAINER,
+      UserRole.PARENT,
+      UserRole.STUDENT,
+    ] as const;
+    let role = platformRole ?? UserRole.STUDENT;
+    if (platformRole !== UserRole.SUPERADMIN) {
+      for (const r of priority) {
+        if (membershipRoles.includes(r)) {
+          role = r;
+          break;
+        }
+      }
+    }
+    const base =
+      role === UserRole.PARENT
+        ? '/parent/messages'
+        : role === UserRole.TRAINER
+          ? '/trainer/messages'
+          : role === UserRole.ADMIN
+            ? '/admin/messages'
+            : role === UserRole.SUPERADMIN
+              ? '/messages'
+              : '/student/messages';
+    return `${base}?conversation=${conversationId}`;
   }
 
   async editMessage(

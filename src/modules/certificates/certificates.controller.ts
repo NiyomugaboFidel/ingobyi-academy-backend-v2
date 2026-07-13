@@ -82,7 +82,9 @@ export class CertificatesController {
   }
 
   @Get('download/:id')
-  @ApiOperation({ summary: 'Download certificate PDF' })
+  @ApiOperation({
+    summary: 'Download certificate PDF (owner or linked parent)',
+  })
   async download(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseCuidPipe) id: string,

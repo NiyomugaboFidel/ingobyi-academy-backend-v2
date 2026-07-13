@@ -25,6 +25,7 @@ import { uniqueSlug } from '../../common/utils/slug.util';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
 import {
   learnerEnrollmentWhereForCourse,
+  excludeCourseTrainerPairs,
 } from '../../common/utils/learner-enrollment';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -477,6 +478,53 @@ export class CoursesService {
       })),
       meta: buildPaginatedMeta(pagination.page, pagination.limit, total),
     };
+  }
+
+  /** All learners enrolled in any course this trainer teaches. */
+  async listTrainerStudents(trainerId: string) {
+    const trainerCourses = await this.prisma.courseTrainer.findMany({
+      where: { userId: trainerId },
+      select: { courseId: true },
+    });
+    const courseIds = trainerCourses.map((c) => c.courseId);
+    if (!courseIds.length) return [];
+
+    const trainerPairs = await this.prisma.courseTrainer.findMany({
+      where: { courseId: { in: courseIds } },
+      select: { courseId: true, userId: true },
+    });
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: excludeCourseTrainerPairs(
+        {
+          courseId: { in: courseIds },
+          status: { in: ['ACTIVE', 'COMPLETED'] },
+        },
+        trainerPairs,
+      ),
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+        course: { select: { id: true, title: true, slug: true } },
+      },
+      orderBy: [
+        { user: { lastName: 'asc' } },
+        { user: { firstName: 'asc' } },
+        { enrolledAt: 'desc' },
+      ],
+    });
+
+    return enrollments.map((e) => ({
+      ...e,
+      user: sanitizeUser(e.user as { passwordHash?: string }),
+    }));
   }
 
   async addTrainer(courseId: string, userId: string) {

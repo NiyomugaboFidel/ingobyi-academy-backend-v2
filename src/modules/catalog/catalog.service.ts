@@ -15,6 +15,8 @@ import {
   resolveDurationRanges,
   resolveLanguages,
   resolveLevels,
+  resolveSkills,
+  skillSearchTerms,
 } from './catalog-search.helpers';
 import { ageBandToNumericRange } from '../../common/constants/student-profile';
 import { CreateCourseReviewDto } from './dto/create-review.dto';
@@ -33,6 +35,7 @@ type CatalogSearchFilters = {
   ratingMin?: number;
   duration?: string;
   ageBand?: string;
+  skills?: string;
 };
 
 @Injectable()
@@ -75,21 +78,31 @@ export class CatalogService {
     );
     const levelValues = resolveLevels(filters.level, filters.levels);
     const languageCodes = resolveLanguages(filters.language);
+    const skillLabels = resolveSkills(filters.skills);
+    const skillOr: Prisma.CourseWhereInput[] = [];
+    for (const skill of skillLabels) {
+      const terms = skillSearchTerms(skill);
+      skillOr.push({ tags: { has: skill } });
+      skillOr.push({
+        category: { name: { equals: skill, mode: 'insensitive' } },
+      });
+      for (const term of terms) {
+        skillOr.push({ tags: { has: term } });
+        skillOr.push({
+          title: { contains: term, mode: 'insensitive' },
+        });
+        skillOr.push({
+          shortDescription: { contains: term, mode: 'insensitive' },
+        });
+        skillOr.push({
+          category: { name: { contains: term, mode: 'insensitive' } },
+        });
+      }
+    }
 
     const where: Prisma.CourseWhereInput = {
       status: CourseStatus.PUBLISHED,
       ...(courseIdFilter ? { id: { in: courseIdFilter } } : {}),
-      ...(filters.q
-        ? {
-            OR: [
-              { title: { contains: filters.q, mode: 'insensitive' } },
-              { description: { contains: filters.q, mode: 'insensitive' } },
-              {
-                shortDescription: { contains: filters.q, mode: 'insensitive' },
-              },
-            ],
-          }
-        : {}),
       ...(categorySlugs.length === 1
         ? { category: { slug: categorySlugs[0] } }
         : categorySlugs.length > 1
@@ -112,18 +125,48 @@ export class CatalogService {
         : languageCodes.length > 1
           ? { language: { in: languageCodes } }
           : {}),
+    };
+
+    const andClauses: Prisma.CourseWhereInput[] = [
+      ...(filters.q
+        ? [
+            {
+              OR: [
+                { title: { contains: filters.q, mode: 'insensitive' as const } },
+                {
+                  description: {
+                    contains: filters.q,
+                    mode: 'insensitive' as const,
+                  },
+                },
+                {
+                  shortDescription: {
+                    contains: filters.q,
+                    mode: 'insensitive' as const,
+                  },
+                },
+              ],
+            },
+          ]
+        : []),
+      ...(skillOr.length ? [{ OR: skillOr }] : []),
       ...(filters.ageBand
         ? (() => {
             const { min, max } = ageBandToNumericRange(filters.ageBand);
-            return {
-              AND: [
-                { OR: [{ minAge: null }, { minAge: { lte: max } }] },
-                { OR: [{ maxAge: null }, { maxAge: { gte: min } }] },
-              ],
-            };
+            return [
+              {
+                OR: [{ minAge: null }, { minAge: { lte: max } }],
+              },
+              {
+                OR: [{ maxAge: null }, { maxAge: { gte: min } }],
+              },
+            ];
           })()
-        : {}),
-    };
+        : []),
+    ];
+    if (andClauses.length) {
+      where.AND = andClauses;
+    }
 
     const orderBy = this.resolveOrderBy(filters.sort, Boolean(filters.q));
 

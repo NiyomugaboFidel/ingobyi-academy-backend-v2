@@ -333,6 +333,7 @@ export class CertificatesService {
 
     return {
       valid: true,
+      id: cert.id,
       issuedAt: cert.issuedAt,
       verifyCode: cert.verifyCode,
       userId: cert.userId,
@@ -366,7 +367,14 @@ export class CertificatesService {
       throw new NotFoundException('Certificate not found');
     }
     if (cert.userId !== userId) {
-      throw new ForbiddenException('Not your certificate');
+      const parentLink = await this.prisma.parentChildLink.findUnique({
+        where: {
+          parentId_childId: { parentId: userId, childId: cert.userId },
+        },
+      });
+      if (!parentLink) {
+        throw new ForbiddenException('Not your certificate');
+      }
     }
 
     await this.generateCertificatePdf(cert.id);

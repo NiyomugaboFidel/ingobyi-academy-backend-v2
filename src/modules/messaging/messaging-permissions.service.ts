@@ -173,7 +173,26 @@ export class MessagingPermissionsService {
         status: MembershipStatus.ACTIVE,
       },
     });
-    if (!targetMembership) {
+    if (targetMembership) return;
+
+    // Allow messaging parents of students enrolled in the admin's organizations
+    const parentOfOrgStudent = await this.prisma.parentChildLink.findFirst({
+      where: {
+        parentId: targetId,
+        approvedAt: { not: null },
+        child: {
+          enrollments: {
+            some: {
+              status: {
+                in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+              },
+              course: { orgId: { in: orgIds } },
+            },
+          },
+        },
+      },
+    });
+    if (!parentOfOrgStudent) {
       throw new ForbiddenException(
         'You can only message members of your organization',
       );
@@ -193,7 +212,9 @@ export class MessagingPermissionsService {
         where: {
           userId: targetId,
           courseId: { in: courseIds },
-          status: EnrollmentStatus.ACTIVE,
+          status: {
+            in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+          },
         },
       }),
       this.prisma.parentChildLink.findFirst({
@@ -204,7 +225,9 @@ export class MessagingPermissionsService {
             enrollments: {
               some: {
                 courseId: { in: courseIds },
-                status: EnrollmentStatus.ACTIVE,
+                status: {
+                  in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+                },
               },
             },
           },
@@ -220,8 +243,20 @@ export class MessagingPermissionsService {
   }
 
   private async assertStudentCanMessage(studentId: string, targetId: string) {
+    const parentLink = await this.prisma.parentChildLink.findFirst({
+      where: {
+        childId: studentId,
+        parentId: targetId,
+        approvedAt: { not: null },
+      },
+    });
+    if (parentLink) return;
+
     const enrollments = await this.prisma.enrollment.findMany({
-      where: { userId: studentId, status: EnrollmentStatus.ACTIVE },
+      where: {
+        userId: studentId,
+        status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+      },
       select: { course: { select: { id: true, orgId: true } } },
     });
     const courseIds = enrollments.map((e) => e.course.id);
@@ -232,30 +267,44 @@ export class MessagingPermissionsService {
           .filter((id): id is string => !!id),
       ),
     ];
-    if (!courseIds.length)
-      throw new ForbiddenException('Not enrolled in any courses');
+    if (!courseIds.length) {
+      throw new ForbiddenException(
+        'You can only message linked parents, or trainers and admins of your courses',
+      );
+    }
 
     const [trainer, admin] = await Promise.all([
       this.prisma.courseTrainer.findFirst({
         where: { userId: targetId, courseId: { in: courseIds } },
       }),
-      this.prisma.membership.findFirst({
-        where: {
-          userId: targetId,
-          orgId: { in: orgIds },
-          role: UserRole.ADMIN,
-          status: MembershipStatus.ACTIVE,
-        },
-      }),
+      orgIds.length
+        ? this.prisma.membership.findFirst({
+            where: {
+              userId: targetId,
+              orgId: { in: orgIds },
+              role: UserRole.ADMIN,
+              status: MembershipStatus.ACTIVE,
+            },
+          })
+        : Promise.resolve(null),
     ]);
     if (!trainer && !admin) {
       throw new ForbiddenException(
-        'You can only message trainers and admins of your enrolled courses',
+        'You can only message linked parents, trainers, and admins of your courses',
       );
     }
   }
 
   private async assertParentCanMessage(parentId: string, targetId: string) {
+    const childLink = await this.prisma.parentChildLink.findFirst({
+      where: {
+        parentId,
+        childId: targetId,
+        approvedAt: { not: null },
+      },
+    });
+    if (childLink) return;
+
     const links = await this.prisma.parentChildLink.findMany({
       where: { parentId, approvedAt: { not: null } },
       select: { childId: true },
@@ -264,19 +313,43 @@ export class MessagingPermissionsService {
     if (!childIds.length) throw new ForbiddenException('No linked children');
 
     const childEnrollments = await this.prisma.enrollment.findMany({
-      where: { userId: { in: childIds }, status: EnrollmentStatus.ACTIVE },
-      select: { courseId: true },
+      where: {
+        userId: { in: childIds },
+        status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+      },
+      select: { courseId: true, course: { select: { orgId: true } } },
     });
     const courseIds = childEnrollments.map((e) => e.courseId);
-    if (!courseIds.length)
+    const orgIds = [
+      ...new Set(
+        childEnrollments
+          .map((e) => e.course.orgId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    if (!courseIds.length) {
       throw new ForbiddenException('Children not enrolled in courses');
+    }
 
-    const trainer = await this.prisma.courseTrainer.findFirst({
-      where: { userId: targetId, courseId: { in: courseIds } },
-    });
-    if (!trainer) {
+    const [trainer, admin] = await Promise.all([
+      this.prisma.courseTrainer.findFirst({
+        where: { userId: targetId, courseId: { in: courseIds } },
+      }),
+      orgIds.length
+        ? this.prisma.membership.findFirst({
+            where: {
+              userId: targetId,
+              orgId: { in: orgIds },
+              role: UserRole.ADMIN,
+              status: MembershipStatus.ACTIVE,
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!trainer && !admin) {
       throw new ForbiddenException(
-        'You can only message trainers teaching your children',
+        'You can only message linked children, trainers, and admins for your children’s courses',
       );
     }
   }
@@ -394,7 +467,10 @@ export class MessagingPermissionsService {
 
     if (role === UserRole.STUDENT) {
       const enrollments = await this.prisma.enrollment.findMany({
-        where: { userId, status: EnrollmentStatus.ACTIVE },
+        where: {
+          userId,
+          status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+        },
         select: { course: { select: { id: true, title: true, orgId: true } } },
       });
       const courseIds = enrollments.map((e) => e.course.id);
@@ -406,22 +482,42 @@ export class MessagingPermissionsService {
         ),
       ];
 
-      const trainers = await this.prisma.courseTrainer.findMany({
-        where: { courseId: { in: courseIds } },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatarUrl: true,
-              platformRole: true,
-              lastSeenAt: true,
+      const [trainers, parentLinks] = await Promise.all([
+        courseIds.length
+          ? this.prisma.courseTrainer.findMany({
+              where: { courseId: { in: courseIds } },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    avatarUrl: true,
+                    platformRole: true,
+                    lastSeenAt: true,
+                  },
+                },
+                course: { select: { id: true, title: true } },
+              },
+            })
+          : Promise.resolve([]),
+        this.prisma.parentChildLink.findMany({
+          where: { childId: userId, approvedAt: { not: null } },
+          include: {
+            parent: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+                platformRole: true,
+                lastSeenAt: true,
+                isActive: true,
+              },
             },
           },
-          course: { select: { id: true, title: true } },
-        },
-      });
+        }),
+      ]);
 
       const adminMemberships = orgIds.length
         ? await this.prisma.membership.findMany({
@@ -497,42 +593,165 @@ export class MessagingPermissionsService {
           });
         }
       }
+      for (const link of parentLinks) {
+        if (!link.parent.isActive || map.has(link.parent.id)) continue;
+        map.set(link.parent.id, {
+          id: link.parent.id,
+          firstName: link.parent.firstName,
+          lastName: link.parent.lastName,
+          avatarUrl: link.parent.avatarUrl,
+          platformRole: link.parent.platformRole,
+          lastSeenAt: link.parent.lastSeenAt,
+          contactLabel: 'Linked parent',
+        });
+      }
       return Array.from(map.values());
     }
 
     if (role === UserRole.PARENT) {
-      const childIds = (
-        await this.prisma.parentChildLink.findMany({
-          where: { parentId: userId, approvedAt: { not: null } },
-          select: { childId: true },
-        })
-      ).map((l) => l.childId);
-
-      const courseIds = (
-        await this.prisma.enrollment.findMany({
-          where: { userId: { in: childIds }, status: EnrollmentStatus.ACTIVE },
-          select: { courseId: true },
-        })
-      ).map((e) => e.courseId);
-
-      const trainerIds = (
-        await this.prisma.courseTrainer.findMany({
-          where: { courseId: { in: courseIds } },
-          select: { userId: true },
-        })
-      ).map((t) => t.userId);
-
-      return this.prisma.user.findMany({
-        where: { id: { in: trainerIds }, isActive: true },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          avatarUrl: true,
-          platformRole: true,
-          lastSeenAt: true,
+      const childLinks = await this.prisma.parentChildLink.findMany({
+        where: { parentId: userId, approvedAt: { not: null } },
+        include: {
+          child: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+              platformRole: true,
+              lastSeenAt: true,
+              isActive: true,
+            },
+          },
         },
       });
+      const childIds = childLinks.map((l) => l.childId);
+
+      const enrollments = await this.prisma.enrollment.findMany({
+        where: {
+          userId: { in: childIds },
+          status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+        },
+        select: {
+          courseId: true,
+          course: { select: { id: true, title: true, orgId: true } },
+        },
+      });
+      const courseIds = enrollments.map((e) => e.courseId);
+      const orgIds = [
+        ...new Set(
+          enrollments
+            .map((e) => e.course.orgId)
+            .filter((id): id is string => !!id),
+        ),
+      ];
+
+      const trainers = courseIds.length
+        ? await this.prisma.courseTrainer.findMany({
+            where: { courseId: { in: courseIds } },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  avatarUrl: true,
+                  platformRole: true,
+                  lastSeenAt: true,
+                },
+              },
+              course: { select: { id: true, title: true } },
+            },
+          })
+        : [];
+
+      const adminMemberships = orgIds.length
+        ? await this.prisma.membership.findMany({
+            where: {
+              orgId: { in: orgIds },
+              role: UserRole.ADMIN,
+              status: MembershipStatus.ACTIVE,
+              userId: { not: userId },
+            },
+            select: { userId: true, orgId: true },
+          })
+        : [];
+
+      const [adminUsers, orgs] = await Promise.all([
+        adminMemberships.length
+          ? this.prisma.user.findMany({
+              where: {
+                id: { in: adminMemberships.map((m) => m.userId) },
+                isActive: true,
+              },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+                platformRole: true,
+                lastSeenAt: true,
+              },
+            })
+          : Promise.resolve([]),
+        orgIds.length
+          ? this.prisma.organization.findMany({
+              where: { id: { in: orgIds } },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve([]),
+      ]);
+
+      const orgNameById = new Map(orgs.map((o) => [o.id, o.name]));
+      const admins = adminMemberships
+        .map((m) => ({
+          userId: m.userId,
+          user: adminUsers.find((u) => u.id === m.userId)!,
+          orgName: orgNameById.get(m.orgId) ?? 'Organization',
+        }))
+        .filter((a) => a.user);
+
+      type Contact = {
+        id: string;
+        firstName: string;
+        lastName: string;
+        avatarUrl: string | null;
+        platformRole: UserRole;
+        lastSeenAt: Date | null;
+        contactLabel?: string;
+      };
+
+      const map = new Map<string, Contact>();
+      for (const link of childLinks) {
+        if (!link.child.isActive) continue;
+        map.set(link.child.id, {
+          id: link.child.id,
+          firstName: link.child.firstName,
+          lastName: link.child.lastName,
+          avatarUrl: link.child.avatarUrl,
+          platformRole: link.child.platformRole,
+          lastSeenAt: link.child.lastSeenAt,
+          contactLabel: 'Linked child',
+        });
+      }
+      for (const t of trainers) {
+        const existing = map.get(t.userId);
+        const label = `Trainer · ${t.course.title}`;
+        if (existing) {
+          existing.contactLabel = `${existing.contactLabel}; ${t.course.title}`;
+        } else {
+          map.set(t.userId, { ...t.user, contactLabel: label });
+        }
+      }
+      for (const a of admins) {
+        if (!map.has(a.userId)) {
+          map.set(a.userId, {
+            ...a.user,
+            contactLabel: `Admin · ${a.orgName}`,
+          });
+        }
+      }
+      return Array.from(map.values());
     }
 
     return [];

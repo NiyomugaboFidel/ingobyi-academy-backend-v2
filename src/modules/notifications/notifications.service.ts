@@ -57,6 +57,17 @@ export class NotificationsService implements OnModuleInit {
     };
   }
 
+  /** Unread account alerts (excludes chat messages — those use the messages badge). */
+  async unreadAccountCount(userId: string) {
+    return this.prisma.notification.count({
+      where: {
+        userId,
+        isRead: false,
+        type: { not: NotificationType.MESSAGE_RECEIVED },
+      },
+    });
+  }
+
   async markRead(id: string, userId: string) {
     return this.prisma.notification.update({
       where: { id, userId },

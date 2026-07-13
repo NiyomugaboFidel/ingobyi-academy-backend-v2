@@ -19,6 +19,15 @@ export function resolveWorkspace(
   preferredOrgId?: string,
 ): WorkspaceContext {
   if (platformRole === UserRole.SUPERADMIN) {
+    // Superadmins are not org members; they may still select any org as
+    // inspection context (preferredOrgId comes from switch-org / JWT).
+    if (preferredOrgId) {
+      return {
+        platformRole: UserRole.SUPERADMIN,
+        orgId: preferredOrgId,
+        orgRole: UserRole.ADMIN,
+      };
+    }
     return { platformRole: UserRole.SUPERADMIN };
   }
 

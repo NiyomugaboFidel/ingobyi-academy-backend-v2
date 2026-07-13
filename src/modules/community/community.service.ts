@@ -1,5 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { MembershipStatus, Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { MembershipStatus, NotificationType, Prisma } from '@prisma/client';
 import {
   buildPaginatedMeta,
   PaginationDto,
@@ -10,6 +14,7 @@ import {
 } from '../../common/utils/public-user-meta';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AchievementsService } from '../achievements/achievements.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 
@@ -42,6 +47,7 @@ export class CommunityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly achievements: AchievementsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async feed(
@@ -189,6 +195,16 @@ export class CommunityService {
   }
 
   async toggleFollow(followerId: string, followingId: string) {
+    if (followerId === followingId) {
+      throw new BadRequestException('You cannot follow yourself');
+    }
+
+    const target = await this.prisma.user.findFirst({
+      where: { id: followingId, isActive: true },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException('User not found');
+
     const existing = await this.prisma.userFollow.findUnique({
       where: { followerId_followingId: { followerId, followingId } },
     });
@@ -196,7 +212,25 @@ export class CommunityService {
       await this.prisma.userFollow.delete({ where: { id: existing.id } });
       return { following: false };
     }
+
     await this.prisma.userFollow.create({ data: { followerId, followingId } });
+
+    const follower = await this.prisma.user.findUnique({
+      where: { id: followerId },
+      select: { firstName: true, lastName: true },
+    });
+    const followerName = follower
+      ? `${follower.firstName} ${follower.lastName}`.trim()
+      : 'Someone';
+
+    void this.notifications.create(
+      followingId,
+      NotificationType.NEW_FOLLOWER,
+      `${followerName} started following you`,
+      'You have a new follower on Ingobyi Academy.',
+      `/users/${followerId}`,
+    );
+
     return { following: true };
   }
 

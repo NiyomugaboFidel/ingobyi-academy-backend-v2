@@ -65,3 +65,39 @@ export function intersectIds(
   const allowed = new Set(next);
   return current.filter((id) => allowed.has(id));
 }
+
+/** Keywords derived from a student interested-skill label for course matching. */
+export function skillSearchTerms(skill: string): string[] {
+  const cleaned = skill.trim();
+  if (!cleaned) return [];
+  const parts = cleaned
+    .split(/[&,/|]+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= 3);
+  const extras: string[] = [];
+  const lower = cleaned.toLowerCase();
+  if (lower.includes('coding') || lower.includes('programming')) {
+    extras.push('coding', 'programming', 'code', 'software');
+  }
+  if (lower.includes('robot')) extras.push('robotics', 'robot', 'stem');
+  if (lower.includes('math')) extras.push('mathematics', 'math');
+  if (lower.includes('art') || lower.includes('design')) {
+    extras.push('art', 'design', 'creative');
+  }
+  if (lower.includes('business') || lower.includes('entrepreneur')) {
+    extras.push('business', 'entrepreneurship');
+  }
+  if (lower.includes('public speaking')) extras.push('speaking', 'communication');
+  if (lower.includes('creative writing')) extras.push('writing', 'creative writing');
+  if (lower.includes('physical')) extras.push('sport', 'physical', 'pe');
+  if (lower.includes('social studies')) extras.push('social', 'civics', 'history');
+  if (lower.includes('language')) extras.push('language', 'languages');
+  if (lower.includes('music')) extras.push('music');
+  if (lower.includes('science')) extras.push('science');
+
+  return [...new Set([cleaned, ...parts, ...extras])];
+}
+
+export function resolveSkills(skills?: string): string[] {
+  return [...new Set(parseCsv(skills))];
+}

@@ -21,9 +21,19 @@ describe('resolveWorkspace', () => {
     },
   ];
 
-  it('returns superadmin without org context', () => {
+  it('returns superadmin without org context when none selected', () => {
     expect(resolveWorkspace(UserRole.SUPERADMIN, memberships)).toEqual({
       platformRole: UserRole.SUPERADMIN,
+    });
+  });
+
+  it('lets superadmin select any preferred org without membership', () => {
+    expect(
+      resolveWorkspace(UserRole.SUPERADMIN, [], 'org-external'),
+    ).toEqual({
+      platformRole: UserRole.SUPERADMIN,
+      orgId: 'org-external',
+      orgRole: UserRole.ADMIN,
     });
   });
 

@@ -139,6 +139,7 @@ enum NotificationType {
   ACHIEVEMENT_EARNED
   COMMENT_REPLY
   COURSE_APPROVED
+  NEW_FOLLOWER
 }
 
 enum ConversationType {

@@ -238,4 +238,308 @@ export class AnalyticsService {
       data: JSON.stringify(rows, null, 2),
     };
   }
+
+  async trainerWorkOverview(trainerId: string, courseId: string) {
+    const access = await this.prisma.courseTrainer.findFirst({
+      where: { userId: trainerId, courseId },
+      select: {
+        courseId: true,
+        course: { select: { id: true, title: true } },
+      },
+    });
+    if (!access) {
+      return {
+        course: null as { id: string; title: string } | null,
+        summary: {
+          students: 0,
+          assignmentsGraded: 0,
+          assignmentsPending: 0,
+          quizAttempts: 0,
+          attendanceMarked: 0,
+          presentRate: null as number | null,
+        },
+        students: [],
+      };
+    }
+
+    const courseTitle = new Map([[access.course.id, access.course.title]]);
+
+    const trainerPairs = await this.prisma.courseTrainer.findMany({
+      where: { courseId },
+      select: { courseId: true, userId: true },
+    });
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: excludeCourseTrainerPairs(
+        { courseId, status: { in: ['ACTIVE', 'COMPLETED'] } },
+        trainerPairs,
+      ),
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        course: { select: { id: true, title: true } },
+      },
+    });
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: {
+        module: { courseId },
+        type: { in: ['ASSIGNMENT', 'QUIZ'] },
+      },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        module: { select: { courseId: true } },
+      },
+    });
+
+    const lessonMeta = new Map(
+      lessons.map((l) => [
+        l.id,
+        {
+          title: l.title,
+          type: l.type,
+          courseId: l.module.courseId,
+          courseTitle: courseTitle.get(l.module.courseId) ?? 'Course',
+        },
+      ]),
+    );
+    const assignmentLessonIds = lessons
+      .filter((l) => l.type === 'ASSIGNMENT')
+      .map((l) => l.id);
+    const quizLessonIds = lessons.filter((l) => l.type === 'QUIZ').map((l) => l.id);
+
+    const [assignments, quizAttempts, sessions] = await Promise.all([
+      assignmentLessonIds.length
+        ? this.prisma.assignment.findMany({
+            where: { lessonId: { in: assignmentLessonIds } },
+            include: {
+              submissions: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      quizLessonIds.length
+        ? this.prisma.quizAttempt.findMany({
+            where: { lessonId: { in: quizLessonIds } },
+            orderBy: { attemptedAt: 'desc' },
+            include: { lesson: { select: { id: true, title: true } } },
+          })
+        : Promise.resolve([]),
+      this.prisma.physicalSession.findMany({
+        where: { courseId },
+        include: {
+          attendance: true,
+          course: { select: { title: true } },
+        },
+        orderBy: { startTime: 'desc' },
+      }),
+    ]);
+
+    type StudentBucket = {
+      userId: string;
+      name: string;
+      email: string;
+      courses: Set<string>;
+      assignments: Array<{
+        title: string;
+        courseTitle: string;
+        score: number | null;
+        maxScore: number;
+        status: 'graded' | 'submitted';
+        submittedAt: string | null;
+      }>;
+      quizzes: Array<{
+        title: string;
+        courseTitle: string;
+        score: number;
+        isPassed: boolean;
+        attemptedAt: string;
+      }>;
+      attendance: Array<{
+        sessionTitle: string;
+        courseTitle: string;
+        status: string;
+        date: string;
+      }>;
+    };
+
+    const byStudent = new Map<string, StudentBucket>();
+    const ensure = (
+      userId: string,
+      name: string,
+      email: string,
+      courseName?: string,
+    ) => {
+      let row = byStudent.get(userId);
+      if (!row) {
+        row = {
+          userId,
+          name,
+          email,
+          courses: new Set(),
+          assignments: [],
+          quizzes: [],
+          attendance: [],
+        };
+        byStudent.set(userId, row);
+      }
+      if (courseName) row.courses.add(courseName);
+      return row;
+    };
+
+    for (const e of enrollments) {
+      ensure(
+        e.user.id,
+        `${e.user.firstName} ${e.user.lastName}`.trim(),
+        e.user.email,
+        e.course.title,
+      );
+    }
+
+    let assignmentsGraded = 0;
+    let assignmentsPending = 0;
+    for (const assignment of assignments) {
+      const meta = lessonMeta.get(assignment.lessonId);
+      if (!meta) continue;
+      for (const sub of assignment.submissions) {
+        const student = ensure(
+          sub.user.id,
+          `${sub.user.firstName} ${sub.user.lastName}`.trim(),
+          sub.user.email,
+          meta.courseTitle,
+        );
+        const graded = sub.score != null;
+        if (graded) assignmentsGraded += 1;
+        else assignmentsPending += 1;
+        student.assignments.push({
+          title: assignment.title || meta.title,
+          courseTitle: meta.courseTitle,
+          score: sub.score,
+          maxScore: assignment.maxScore,
+          status: graded ? 'graded' : 'submitted',
+          submittedAt: sub.submittedAt?.toISOString() ?? null,
+        });
+      }
+    }
+
+    const latestQuiz = new Map<string, (typeof quizAttempts)[number]>();
+    for (const attempt of quizAttempts) {
+      const key = `${attempt.userId}:${attempt.lessonId}`;
+      if (!latestQuiz.has(key)) latestQuiz.set(key, attempt);
+    }
+
+    const quizUserIds = [...new Set([...latestQuiz.values()].map((a) => a.userId))];
+    const attendanceUserIds = [
+      ...new Set(sessions.flatMap((s) => s.attendance.map((a) => a.userId))),
+    ];
+    const extraUserIds = [...new Set([...quizUserIds, ...attendanceUserIds])].filter(
+      (id) => !byStudent.has(id),
+    );
+    if (extraUserIds.length) {
+      const extraUsers = await this.prisma.user.findMany({
+        where: { id: { in: extraUserIds } },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      for (const u of extraUsers) {
+        ensure(u.id, `${u.firstName} ${u.lastName}`.trim(), u.email);
+      }
+    }
+
+    for (const attempt of latestQuiz.values()) {
+      const meta = lessonMeta.get(attempt.lessonId);
+      const student = byStudent.get(attempt.userId);
+      if (!meta || !student) continue;
+      student.courses.add(meta.courseTitle);
+      student.quizzes.push({
+        title: attempt.lesson.title,
+        courseTitle: meta.courseTitle,
+        score: attempt.score,
+        isPassed: attempt.isPassed,
+        attemptedAt: attempt.attemptedAt.toISOString(),
+      });
+    }
+
+    let attendanceMarked = 0;
+    let presentCount = 0;
+    for (const session of sessions) {
+      for (const row of session.attendance) {
+        attendanceMarked += 1;
+        if (row.status === 'PRESENT' || row.status === 'LATE') presentCount += 1;
+        const student = byStudent.get(row.userId);
+        if (!student) continue;
+        student.courses.add(session.course.title);
+        student.attendance.push({
+          sessionTitle: session.title,
+          courseTitle: session.course.title,
+          status: row.status,
+          date: session.startTime.toISOString(),
+        });
+      }
+    }
+
+    const students = [...byStudent.values()]
+      .map((s) => {
+        const gradedScores = s.assignments
+          .filter((a) => a.score != null)
+          .map((a) => (a.score! / Math.max(a.maxScore, 1)) * 100);
+        const quizScores = s.quizzes.map((q) => q.score);
+        const present = s.attendance.filter(
+          (a) => a.status === 'PRESENT' || a.status === 'LATE',
+        ).length;
+        return {
+          userId: s.userId,
+          name: s.name,
+          email: s.email,
+          courses: [...s.courses],
+          assignments: s.assignments,
+          quizzes: s.quizzes,
+          attendance: s.attendance,
+          assignmentAvg:
+            gradedScores.length > 0
+              ? Math.round(
+                  gradedScores.reduce((a, b) => a + b, 0) / gradedScores.length,
+                )
+              : null,
+          quizAvg:
+            quizScores.length > 0
+              ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length)
+              : null,
+          attendanceRate:
+            s.attendance.length > 0
+              ? Math.round((present / s.attendance.length) * 100)
+              : null,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      course: { id: access.course.id, title: access.course.title },
+      summary: {
+        students: students.length,
+        assignmentsGraded,
+        assignmentsPending,
+        quizAttempts: latestQuiz.size,
+        attendanceMarked,
+        presentRate:
+          attendanceMarked > 0
+            ? Math.round((presentCount / attendanceMarked) * 100)
+            : null,
+      },
+      students,
+    };
+  }
 }
+

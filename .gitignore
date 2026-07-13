@@ -39,3 +39,7 @@ storage/
 .cursor/
 .cursorrules
 .cursorignore
+.agent/
+.agents/
+AGENTS.md
+CLAUDE.md
