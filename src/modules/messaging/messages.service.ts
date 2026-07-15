@@ -8,6 +8,7 @@ import { ModuleRef } from '@nestjs/core';
 import { ConversationType, NotificationType, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
+import { guardRole } from '../../common/utils/resolve-effective-role';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MessagingPermissionsService } from './messaging-permissions.service';
 import { ConversationsService } from './conversations.service';
@@ -144,7 +145,7 @@ export class MessagesService implements OnModuleInit {
     ) {
       await this.permissions.assertCanPostInCourseRoom(
         user.userId,
-        user.role,
+        guardRole(user),
         conversation.courseId,
         data.isAnnouncement,
       );
@@ -155,7 +156,7 @@ export class MessagesService implements OnModuleInit {
       if (other) {
         await this.permissions.assertDirectMessaging(
           user.userId,
-          user.role,
+          guardRole(user),
           other.userId,
         );
       }
@@ -314,7 +315,7 @@ export class MessagesService implements OnModuleInit {
 
     await this.permissions.assertCanDeleteMessage(
       user.userId,
-      user.role,
+      guardRole(user),
       message.senderId,
       message.conversation,
     );
@@ -398,7 +399,7 @@ export class MessagesService implements OnModuleInit {
 
     await this.permissions.assertCanPin(
       user.userId,
-      user.role,
+      guardRole(user),
       conversation.courseId,
     );
 

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConversationType, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
+import { guardRole } from '../../common/utils/resolve-effective-role';
 import { MessagingPermissionsService } from './messaging-permissions.service';
 
 const userSelect = {
@@ -23,7 +24,7 @@ export class ConversationsService {
   async getByCourseId(courseId: string, user: AuthenticatedUser) {
     await this.permissions.assertCourseRoomAccess(
       user.userId,
-      user.role,
+      guardRole(user),
       courseId,
     );
     const conv = await this.ensureCourseConversation(courseId);
@@ -77,7 +78,7 @@ export class ConversationsService {
   ) {
     await this.permissions.assertDirectMessaging(
       user.userId,
-      user.role,
+      guardRole(user),
       otherUserId,
     );
 
@@ -211,16 +212,17 @@ export class ConversationsService {
     user: AuthenticatedUser,
     archivedOnly = false,
   ) {
+    const role = guardRole(user);
     let courseIds: string[] = [];
 
-    if (user.role === UserRole.SUPERADMIN) {
+    if (role === UserRole.SUPERADMIN) {
       const courses = await this.prisma.course.findMany({
         where: { status: 'PUBLISHED' },
         select: { id: true },
         take: 50,
       });
       courseIds = courses.map((c) => c.id);
-    } else if (user.role === UserRole.ADMIN) {
+    } else if (role === UserRole.ADMIN) {
       const orgs = await this.prisma.membership.findMany({
         where: { userId: user.userId, role: UserRole.ADMIN, status: 'ACTIVE' },
         select: { orgId: true },
